@@ -31,10 +31,20 @@ const randomTimeWithSeconds = (hour, minuteStart, minuteEnd) => (
   `${String(hour).padStart(2, '0')}:${String(randomInt(minuteStart, minuteEnd)).padStart(2, '0')}:${String(randomInt(0, 59)).padStart(2, '0')}`
 );
 
+const randomSecondOffset = (minutes) => (minutes * 60) + randomInt(0, 59);
+
 const timeToSeconds = (time) => {
   if (!time || !time.includes(':')) return 0;
   const [hours = 0, minutes = 0, seconds = 0] = time.split(':').map(Number);
   return (hours * 3600) + (minutes * 60) + seconds;
+};
+
+const secondsToTime = (seconds) => {
+  const safeSeconds = Math.max(0, Math.min((24 * 3600) - 1, Number(seconds) || 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const rest = safeSeconds % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
 };
 
 const toMinutes = (time) => {
@@ -44,6 +54,25 @@ const toMinutes = (time) => {
 };
 
 const nowIso = () => new Date().toISOString();
+
+const compareConnectionTimes = (first, second) => {
+  const firstKey = [
+    first.date || '',
+    first.startTime || '',
+    first.learnerName || '',
+    first.id || '',
+  ].join('|');
+  const secondKey = [
+    second.date || '',
+    second.startTime || '',
+    second.learnerName || '',
+    second.id || '',
+  ].join('|');
+
+  return firstKey.localeCompare(secondKey);
+};
+
+const sortConnectionTimes = (connectionTimes = []) => [...connectionTimes].sort(compareConnectionTimes);
 
 const parseFrenchDate = (date) => {
   const match = String(date || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
@@ -98,7 +127,7 @@ export const formatDurationSeconds = (seconds) => {
 const durationSecondsBetween = (startTime, endTime) => {
   const start = timeToSeconds(startTime);
   const end = timeToSeconds(endTime);
-  if (end < start) {
+  if (end <= start) {
     throw new Error('Heure fin doit etre apres heure debut.');
   }
   return end - start;
@@ -124,7 +153,7 @@ export const durationMinutesBetween = (startTime, endTime) => {
   if (!startTime || !endTime) return 0;
   const start = toMinutes(startTime);
   const end = toMinutes(endTime);
-  if (end < start) {
+  if (end <= start) {
     throw new Error('Heure fin doit etre apres heure debut.');
   }
   return end - start;
@@ -209,9 +238,14 @@ const readState = () => {
 };
 
 const writeState = (state) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const sortedState = {
+    ...state,
+    connectionTimes: sortConnectionTimes(state.connectionTimes),
+  };
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sortedState));
   window.dispatchEvent(new Event('connection-admin-store-updated'));
-  mirrorStateToFirestore(state).catch((error) => {
+  mirrorStateToFirestore(sortedState).catch((error) => {
     console.warn('Firestore sync failed:', error.message);
   });
 };
@@ -227,7 +261,11 @@ export const normalizeType = (type) => {
 export const getAdminState = () => readState();
 
 export const cacheAdminState = (state) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizeState(state)));
+  const cleanState = sanitizeState(state);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    ...cleanState,
+    connectionTimes: sortConnectionTimes(cleanState.connectionTimes),
+  }));
   window.dispatchEvent(new Event('connection-admin-store-updated'));
 };
 
@@ -543,6 +581,227 @@ export const saveConnectionTime = (entry) => {
   return cleanEntry;
 };
 
+const recalculateSingleSession = (entry) => {
+  const isAbsent = entry.attendance === 'ABSENT' || entry.status === 'Absent';
+  const durationSeconds = isAbsent ? 0 : durationSecondsBetween(entry.startTime, entry.endTime);
+  const durationMinutes = Math.round((durationSeconds / 60) * 100) / 100;
+
+  return {
+    ...entry,
+    durationMinutes,
+    durationSeconds,
+    duration: formatDurationMinutes(durationMinutes),
+    durationFormatted: formatDurationSeconds(durationSeconds),
+    status: isAbsent ? 'Absent' : entry.type === 'ENTREPRISE' ? 'En entreprise' : entry.type === 'FERIE' ? 'Ferie' : 'Present',
+    updatedAt: nowIso(),
+  };
+};
+
+const getSessionWindow = (entry) => {
+  const currentStart = timeToSeconds(entry.startTime);
+  const isMorning = currentStart < (12 * 3600);
+
+  return isMorning
+    ? { label: 'matin', start: 9 * 3600, end: (11 * 3600) + (30 * 60) }
+    : { label: 'apres-midi', start: 13 * 3600, end: (15 * 3600) + (30 * 60) };
+};
+
+const formatChangeRange = (entry) => `${entry.startTime || '-'} - ${entry.endTime || '-'}`;
+
+const buildRandomAdjustment = (entry, index) => {
+  const window = getSessionWindow(entry);
+  const originalStart = timeToSeconds(entry.startTime);
+  const originalEnd = timeToSeconds(entry.endTime);
+  const safeStart = Math.max(window.start, Math.min(originalStart || window.start, window.end - (20 * 60)));
+  const safeEnd = Math.min(window.end, Math.max(originalEnd || window.end, safeStart + (20 * 60)));
+  const availableSeconds = safeEnd - safeStart;
+  const options = window.label === 'apres-midi'
+    ? ['pause', 'late', 'early', 'skip-afternoon']
+    : ['pause', 'late', 'early'];
+  const type = options[randomInt(0, options.length - 1)];
+  const baseReason = {
+    pause: 'Pause aleatoire pendant la session',
+    late: 'Connexion avec quelques minutes de retard',
+    early: 'Deconnexion quelques minutes avant la fin',
+    'skip-afternoon': 'Absence complete sur la session de l apres-midi',
+  }[type];
+
+  if (type === 'skip-afternoon') {
+    const replacement = recalculateSingleSession({
+      ...entry,
+      startTime: secondsToTime(window.start + randomInt(0, 59)),
+      endTime: secondsToTime(window.end - randomInt(0, 59)),
+      attendance: 'ABSENT',
+      status: 'Absent',
+      pauseReason: baseReason,
+    });
+
+    return {
+      id: `random-${entry.id}-${index}`,
+      reason: baseReason,
+      oldTime: formatChangeRange(entry),
+      newTime: 'Absent',
+      updates: [replacement],
+      creates: [],
+      deletes: [],
+    };
+  }
+
+  if (type === 'late') {
+    const lateSeconds = randomSecondOffset([2, 5, 10, 15][randomInt(0, 3)]);
+    const newStart = Math.min(safeStart + lateSeconds, safeEnd - (15 * 60));
+    const replacement = recalculateSingleSession({
+      ...entry,
+      startTime: secondsToTime(newStart),
+      endTime: secondsToTime(safeEnd - randomInt(0, 59)),
+      attendance: 'PRESENT',
+      status: 'Present',
+      pauseReason: baseReason,
+    });
+
+    return {
+      id: `random-${entry.id}-${index}`,
+      reason: baseReason,
+      oldTime: formatChangeRange(entry),
+      newTime: formatChangeRange(replacement),
+      updates: [replacement],
+      creates: [],
+      deletes: [],
+    };
+  }
+
+  if (type === 'early') {
+    const earlySeconds = randomSecondOffset([2, 5, 10, 15][randomInt(0, 3)]);
+    const newEnd = Math.max(safeEnd - earlySeconds, safeStart + (15 * 60));
+    const replacement = recalculateSingleSession({
+      ...entry,
+      startTime: secondsToTime(safeStart + randomInt(0, 59)),
+      endTime: secondsToTime(newEnd),
+      attendance: 'PRESENT',
+      status: 'Present',
+      pauseReason: baseReason,
+    });
+
+    return {
+      id: `random-${entry.id}-${index}`,
+      reason: baseReason,
+      oldTime: formatChangeRange(entry),
+      newTime: formatChangeRange(replacement),
+      updates: [replacement],
+      creates: [],
+      deletes: [],
+    };
+  }
+
+  if (availableSeconds < 45 * 60) return null;
+
+  const pauseMinutes = [2, 5, 10, 15][randomInt(0, 3)];
+  const pauseDuration = randomSecondOffset(pauseMinutes);
+  const earliestPause = safeStart + (35 * 60);
+  const latestPause = safeEnd - pauseDuration - (25 * 60);
+
+  if (latestPause <= earliestPause) return null;
+
+  const pauseStart = randomInt(earliestPause, latestPause);
+  const pauseEnd = pauseStart + pauseDuration;
+  const firstPart = recalculateSingleSession({
+    ...entry,
+    startTime: secondsToTime(safeStart + randomInt(0, 59)),
+    endTime: secondsToTime(pauseStart),
+    attendance: 'PRESENT',
+    status: 'Present',
+    pauseReason: `${baseReason} (${pauseMinutes} min)`,
+  });
+  const secondPart = recalculateSingleSession({
+    ...entry,
+    id: `${entry.id}-pause-${Date.now()}-${index}`,
+    startTime: secondsToTime(pauseEnd),
+    endTime: secondsToTime(safeEnd - randomInt(0, 59)),
+    attendance: 'PRESENT',
+    status: 'Present',
+    createdAt: nowIso(),
+    pauseReason: `Retour apres pause (${pauseMinutes} min)`,
+  });
+
+  return {
+    id: `random-${entry.id}-${index}`,
+    reason: `${baseReason} de ${pauseMinutes} min`,
+    oldTime: formatChangeRange(entry),
+    newTime: `${formatChangeRange(firstPart)} puis ${formatChangeRange(secondPart)}`,
+    updates: [firstPart],
+    creates: [secondPart],
+    deletes: [],
+  };
+};
+
+export const previewRandomPausesAbsences = (learnerId) => {
+  const state = readState();
+  const learner = state.learners.find((item) => item.id === learnerId);
+  if (!learner) throw new Error('Selectionnez un apprenant avant de generer des pauses.');
+
+  const candidates = sortConnectionTimes(state.connectionTimes)
+    .filter((entry) => (
+      entry.learnerId === learnerId &&
+      entry.type === 'ECOLE' &&
+      entry.startTime &&
+      entry.endTime &&
+      entry.attendance !== 'ABSENT' &&
+      entry.status !== 'Absent'
+    ));
+
+  if (!candidates.length) {
+    throw new Error('Aucune session ecole modifiable pour cet apprenant.');
+  }
+
+  const targetCount = Math.min(Math.max(3, Math.ceil(candidates.length * 0.18)), 10, candidates.length);
+  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+  const changes = [];
+
+  for (const entry of shuffled) {
+    const adjustment = buildRandomAdjustment(entry, changes.length + 1);
+    if (adjustment) changes.push(adjustment);
+    if (changes.length >= targetCount) break;
+  }
+
+  if (!changes.length) {
+    throw new Error('Impossible de generer des pauses valides pour les sessions disponibles.');
+  }
+
+  return {
+    learnerId,
+    learnerName: learner.name || learner.fullName,
+    createdAt: nowIso(),
+    changes,
+  };
+};
+
+export const applyRandomPausesAbsences = (learnerId, preview) => {
+  if (!preview?.changes?.length || preview.learnerId !== learnerId) {
+    throw new Error('Apercu invalide pour cet apprenant.');
+  }
+
+  const state = readState();
+  const updateMap = new Map();
+  const createdEntries = [];
+  const deleteIds = new Set();
+
+  preview.changes.forEach((change) => {
+    (change.updates || []).forEach((entry) => updateMap.set(entry.id, recalculateSingleSession(entry)));
+    (change.creates || []).forEach((entry) => createdEntries.push(recalculateSingleSession(entry)));
+    (change.deletes || []).forEach((id) => deleteIds.add(id));
+  });
+
+  const connectionTimes = [
+    ...state.connectionTimes
+      .filter((entry) => !deleteIds.has(entry.id))
+      .map((entry) => (updateMap.has(entry.id) ? updateMap.get(entry.id) : entry)),
+    ...createdEntries,
+  ];
+
+  writeState({ ...state, connectionTimes });
+  return sortConnectionTimes(connectionTimes).filter((entry) => entry.learnerId === learnerId);
+};
+
 export const createLearner = (learner) => saveLearner(learner);
 
 export const getLearners = () => readState().learners;
@@ -560,14 +819,16 @@ export const createConnectionTime = (entry) => {
   const attendance = entry.attendance || 'PRESENT';
   const isAbsent = attendance === 'ABSENT';
 
-  if (type === 'ECOLE' && !isAbsent && (!startTime || !endTime)) {
-    throw new Error('Heure debut et heure fin sont obligatoires pour une journee ECOLE.');
+  if (!entry.date) {
+    throw new Error('La date est obligatoire.');
   }
 
-  const durationMinutes = type === 'ECOLE' && !isAbsent ? durationMinutesBetween(startTime, endTime) : (
-    !isAbsent && startTime && endTime ? durationMinutesBetween(startTime, endTime) : 0
-  );
-  const durationSeconds = !isAbsent && startTime && endTime ? durationSecondsBetween(startTime, endTime) : durationMinutes * 60;
+  if (!startTime || !endTime) {
+    throw new Error('Heure debut et heure fin sont obligatoires.');
+  }
+
+  const durationMinutes = isAbsent ? 0 : durationMinutesBetween(startTime, endTime);
+  const durationSeconds = isAbsent ? 0 : durationSecondsBetween(startTime, endTime);
 
   const existingEntry = state.connectionTimes.find((item) => item.id === entry.id);
   const usedIps = new Set(state.connectionTimes

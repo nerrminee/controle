@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BiEdit, BiImport, BiPlus, BiTrash } from 'react-icons/bi';
+import { BiImport, BiPlus } from 'react-icons/bi';
 import DataTable from '../../components/DataTable';
 import useAdminConnectionStore from '../../hooks/useAdminConnectionStore';
 import {
@@ -9,6 +9,8 @@ import {
   deleteLearner,
   formatDurationMinutes,
   importLearnerPlanningWithConnections,
+  applyRandomPausesAbsences,
+  previewRandomPausesAbsences,
   updateConnectionTime,
   updateLearner,
 } from '../../services/adminConnectionStore';
@@ -42,19 +44,47 @@ const toMinutes = (time) => {
   return (hours * 60) + minutes;
 };
 
+const sortByDateAndStartTime = (first, second) => (
+  `${first.date || ''}-${first.startTime || ''}-${first.id || ''}`
+    .localeCompare(`${second.date || ''}-${second.startTime || ''}-${second.id || ''}`)
+);
+
 const getPreviewDuration = (entry) => {
   if (!entry.startTime || !entry.endTime) return '';
   const duration = toMinutes(entry.endTime) - toMinutes(entry.startTime);
-  return duration >= 0 ? formatDurationMinutes(duration) : 'Erreur';
+  if (duration <= 0) return 'Erreur';
+  return entry.attendance === 'ABSENT' ? '0h00' : formatDurationMinutes(duration);
 };
 
-const getDurationLabel = (entry) => entry.durationFormatted || (/^\d{2}:\d{2}:\d{2}$/.test(entry.duration || '') ? entry.duration : formatDurationMinutes(entry.durationMinutes || 0));
+const getDurationLabel = (entry) => (
+  entry.durationFormatted ||
+  (/^\d{2}:\d{2}:\d{2}$/.test(entry.duration || '') ? entry.duration : formatDurationMinutes(entry.durationMinutes || 0))
+);
+
+const buildConnectionDraft = (entry) => ({
+  id: entry.id,
+  learnerId: entry.learnerId,
+  week: entry.week || '',
+  tp: entry.tp || '',
+  date: entry.date || '',
+  day: entry.day || '',
+  type: entry.type || 'ECOLE',
+  attendance: entry.attendance || (entry.status === 'Absent' ? 'ABSENT' : 'PRESENT'),
+  content: entry.content || entry.comment || '',
+  startTime: entry.startTime || '',
+  endTime: entry.endTime || '',
+  ipAddress: entry.ipAddress || '',
+  createdAt: entry.createdAt,
+});
 
 const AdminConnectionTimes = () => {
   const { learners, connectionTimes } = useAdminConnectionStore();
   const [learnerForm, setLearnerForm] = useState(emptyLearner);
   const [connectionForm, setConnectionForm] = useState(emptyConnectionTime);
   const [selectedLearnerId, setSelectedLearnerId] = useState('');
+  const [editingConnectionId, setEditingConnectionId] = useState('');
+  const [editingConnectionForm, setEditingConnectionForm] = useState(emptyConnectionTime);
+  const [randomPreview, setRandomPreview] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,24 +92,35 @@ const AdminConnectionTimes = () => {
   const selectedLearner = learners.find((learner) => learner.id === selectedLearnerId);
   const selectedConnectionTimes = useMemo(() => (
     selectedLearnerId
-      ? connectionTimes.filter((entry) => entry.learnerId === selectedLearnerId)
+      ? connectionTimes
+        .filter((entry) => entry.learnerId === selectedLearnerId)
+        .sort(sortByDateAndStartTime)
       : []
   ), [connectionTimes, selectedLearnerId]);
-  const allConnectionRows = useMemo(() => [...connectionTimes].sort((first, second) => (
-    `${first.learnerName || ''}-${first.date || ''}-${first.startTime || ''}`.localeCompare(`${second.learnerName || ''}-${second.date || ''}-${second.startTime || ''}`)
-  )), [connectionTimes]);
+  const allConnectionRows = useMemo(() => [...connectionTimes].sort((first, second) => {
+    const byDate = sortByDateAndStartTime(first, second);
+    if (byDate !== 0) return byDate;
+    return `${first.learnerName || ''}`.localeCompare(`${second.learnerName || ''}`);
+  }), [connectionTimes]);
 
   const resetLearnerForm = () => setLearnerForm(emptyLearner);
   const resetConnectionForm = (learnerId = selectedLearnerId) => {
     setConnectionForm({ ...emptyConnectionTime, learnerId });
   };
+  const cancelConnectionEdit = () => {
+    setEditingConnectionId('');
+    setEditingConnectionForm(emptyConnectionTime);
+  };
+  const cancelRandomPreview = () => setRandomPreview(null);
 
   const updateLearnerForm = (field, value) => {
     setLearnerForm((current) => ({ ...current, [field]: value }));
   };
-
   const updateConnectionForm = (field, value) => {
     setConnectionForm((current) => ({ ...current, [field]: value }));
+  };
+  const updateEditingConnectionForm = (field, value) => {
+    setEditingConnectionForm((current) => ({ ...current, [field]: value }));
   };
 
   const handleSaveLearner = (event) => {
@@ -94,7 +135,7 @@ const AdminConnectionTimes = () => {
         : createLearner(learnerForm);
       setSelectedLearnerId(savedLearner.id);
       resetLearnerForm();
-      setMessage('Apprenant enregistre.');
+      setMessage('Apprenant enregistré.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -112,6 +153,7 @@ const AdminConnectionTimes = () => {
       contractEndDate: learner.contractEndDate || learner.contractEnd || '',
       createdAt: learner.createdAt,
     });
+    setSelectedLearnerId(learner.id);
   };
 
   const handleDeleteLearner = (learnerId) => {
@@ -124,8 +166,10 @@ const AdminConnectionTimes = () => {
       if (selectedLearnerId === learnerId) {
         setSelectedLearnerId('');
         resetConnectionForm('');
+        cancelConnectionEdit();
+        cancelRandomPreview();
       }
-      setMessage('Apprenant et temps lies supprimes.');
+      setMessage('Apprenant et temps liés supprimés.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -136,6 +180,8 @@ const AdminConnectionTimes = () => {
   const handleSelectLearnerForConnection = (learnerId) => {
     setSelectedLearnerId(learnerId);
     resetConnectionForm(learnerId);
+    cancelConnectionEdit();
+    cancelRandomPreview();
     setError('');
     setMessage('');
   };
@@ -147,13 +193,26 @@ const AdminConnectionTimes = () => {
     setLoading(true);
 
     try {
-      if (connectionForm.id) {
-        updateConnectionTime(connectionForm.id, connectionForm);
-      } else {
-        createConnectionTime(connectionForm);
-      }
+      createConnectionTime(connectionForm);
       resetConnectionForm(connectionForm.learnerId);
-      setMessage('Temps de connexion enregistre.');
+      setMessage('Session de connexion ajoutée.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveConnectionEdit = (event) => {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    setLoading(true);
+
+    try {
+      updateConnectionTime(editingConnectionId, editingConnectionForm);
+      cancelConnectionEdit();
+      setMessage('Session de connexion modifiée.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -169,7 +228,7 @@ const AdminConnectionTimes = () => {
     try {
       const result = await readImportFile(event.target.files[0]);
       if (result.type === 'pdf') {
-        throw new Error('Importez le planning au format CSV pour generer les temps de connexion.');
+        throw new Error('Importez le planning au format CSV pour générer les temps de connexion.');
       }
 
       const imported = importLearnerPlanningWithConnections({
@@ -179,7 +238,9 @@ const AdminConnectionTimes = () => {
       });
       setSelectedLearnerId(imported.learner.id);
       resetConnectionForm(imported.learner.id);
-      setMessage(`${imported.learner.fullName} importe: ${imported.planningCount} ligne(s) planning, ${imported.connectionCount} session(s), ${imported.statusCount} statut(s).`);
+      cancelConnectionEdit();
+      cancelRandomPreview();
+      setMessage(`${imported.learner.fullName} importé : ${imported.planningCount} ligne(s) planning, ${imported.connectionCount} session(s), ${imported.statusCount} statut(s).`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -188,23 +249,50 @@ const AdminConnectionTimes = () => {
     }
   };
 
+  const handlePreviewRandomPauses = () => {
+    setError('');
+    setMessage('');
+    cancelConnectionEdit();
+
+    try {
+      const preview = previewRandomPausesAbsences(selectedLearnerId);
+      setRandomPreview(preview);
+      setMessage('Apercu genere. Verifiez les changements avant de confirmer.');
+    } catch (err) {
+      setRandomPreview(null);
+      setError(err.message);
+    }
+  };
+
+  const handleApplyRandomPauses = () => {
+    setError('');
+    setMessage('');
+
+    if (!window.confirm('Confirmer la generation des pauses/absences aleatoires pour cet apprenant ?')) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      applyRandomPausesAbsences(selectedLearnerId, randomPreview);
+      const count = randomPreview?.changes?.length || 0;
+      setRandomPreview(null);
+      setMessage(`${count} changement(s) pauses/absences applique(s).`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEditConnectionTime = (entry) => {
     setSelectedLearnerId(entry.learnerId);
-    setConnectionForm({
-      id: entry.id,
-      learnerId: entry.learnerId,
-      week: entry.week || '',
-      tp: entry.tp || '',
-      date: entry.date || '',
-      day: entry.day || '',
-      type: entry.type || 'ECOLE',
-      attendance: entry.attendance || (entry.status === 'Absent' ? 'ABSENT' : 'PRESENT'),
-      content: entry.content || entry.comment || '',
-      startTime: entry.startTime || '',
-      endTime: entry.endTime || '',
-      ipAddress: entry.ipAddress || '',
-      createdAt: entry.createdAt,
-    });
+    setEditingConnectionId(entry.id);
+    setEditingConnectionForm(buildConnectionDraft(entry));
+    cancelRandomPreview();
+    setError('');
+    setMessage('');
   };
 
   const handleDeleteConnectionTime = (connectionTimeId) => {
@@ -214,7 +302,8 @@ const AdminConnectionTimes = () => {
 
     try {
       deleteConnectionTime(connectionTimeId);
-      setMessage('Temps de connexion supprime.');
+      if (editingConnectionId === connectionTimeId) cancelConnectionEdit();
+      setMessage('Session de connexion supprimée.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -222,16 +311,79 @@ const AdminConnectionTimes = () => {
     }
   };
 
+  const renderConnectionCells = (entry) => {
+    const isEditing = editingConnectionId === entry.id;
+    const form = isEditing ? editingConnectionForm : entry;
+
+    if (!isEditing) {
+      return (
+        <>
+          <td>{entry.week}</td>
+          <td>{entry.date}</td>
+          <td>{entry.day}</td>
+          <td>{entry.type}</td>
+          <td>{entry.content || entry.comment}</td>
+          <td>{entry.startTime || '-'}</td>
+          <td>{entry.endTime || '-'}</td>
+          <td>{getDurationLabel(entry)}</td>
+          <td>
+            <div className="admin-row-actions admin-row-actions-nowrap">
+              <button className="btn btn-secondary btn-compact" type="button" onClick={() => handleEditConnectionTime(entry)}>Modifier</button>
+              <button className="btn btn-secondary btn-compact danger-text" type="button" onClick={() => handleDeleteConnectionTime(entry.id)}>Supprimer</button>
+            </div>
+          </td>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <td>
+          <input className="search-input admin-table-input" value={form.week} onChange={(event) => updateEditingConnectionForm('week', event.target.value)} />
+        </td>
+        <td>
+          <input required type="date" className="search-input admin-table-input" value={form.date} onChange={(event) => updateEditingConnectionForm('date', event.target.value)} />
+        </td>
+        <td>
+          <input className="search-input admin-table-input" value={form.day} onChange={(event) => updateEditingConnectionForm('day', event.target.value)} />
+        </td>
+        <td>
+          <select className="search-input admin-table-input" value={form.type} onChange={(event) => updateEditingConnectionForm('type', event.target.value)}>
+            <option value="ECOLE">École</option>
+            <option value="ENTREPRISE">Entreprise</option>
+            <option value="FERIE">Férié</option>
+          </select>
+        </td>
+        <td>
+          <input className="search-input admin-table-input admin-table-input-wide" value={form.content} onChange={(event) => updateEditingConnectionForm('content', event.target.value)} />
+        </td>
+        <td>
+          <input required type="time" step="1" className="search-input admin-table-input" value={form.startTime} onChange={(event) => updateEditingConnectionForm('startTime', event.target.value)} />
+        </td>
+        <td>
+          <input required type="time" step="1" className="search-input admin-table-input" value={form.endTime} onChange={(event) => updateEditingConnectionForm('endTime', event.target.value)} />
+        </td>
+        <td><strong className="admin-duration-preview">{getPreviewDuration(form) || '0h00'}</strong></td>
+        <td>
+          <div className="admin-row-actions admin-row-actions-nowrap">
+            <button className="btn btn-primary btn-compact" type="submit" form="connection-edit-form" disabled={loading}>Enregistrer</button>
+            <button className="btn btn-secondary btn-compact" type="button" onClick={cancelConnectionEdit}>Annuler</button>
+          </div>
+        </td>
+      </>
+    );
+  };
+
   return (
-    <div className="admin-page">
+    <div className="admin-page admin-connection-page">
       <div className="admin-page-header">
         <div>
-          <h2>Temps de connexion apprenants</h2>
-          <p className="text-secondary">Import planning CSV et suivi des sessions apprenants.</p>
+          <h2>Gestion des temps de connexion</h2>
+          <p className="text-secondary">Ajout, modification et suivi chronologique des sessions apprenants.</p>
         </div>
         <label className="btn btn-secondary admin-file-button">
           <BiImport size={18} />
-          Import planning CSV
+          Importer un planning CSV
           <input type="file" accept=".csv,.tsv,.txt,.xls" onChange={handleImportPlanningFile} />
         </label>
       </div>
@@ -240,16 +392,22 @@ const AdminConnectionTimes = () => {
       {message && <div className="admin-alert admin-alert-success">{message}</div>}
       {error && <div className="admin-alert admin-alert-danger">{error}</div>}
 
-      <form className="custom-card admin-stacked-form" onSubmit={handleSaveLearner}>
-        <section className="admin-form-section">
-          <h3>Ajouter apprenant</h3>
+      <section className="custom-card admin-section-card">
+        <div className="admin-section-heading">
+          <div>
+            <h3>Informations apprenant</h3>
+            <p className="text-secondary">Créez, modifiez ou sélectionnez rapidement un apprenant.</p>
+          </div>
+        </div>
+
+        <form className="admin-stacked-form" onSubmit={handleSaveLearner}>
           <div className="admin-form-grid admin-learner-form-grid">
             <label className="form-field">
-              <span>Nom</span>
+              <span>Nom complet</span>
               <input className="search-input" value={learnerForm.name} onChange={(event) => updateLearnerForm('name', event.target.value)} />
             </label>
             <label className="form-field">
-              <span>Code</span>
+              <span>Code apprenant</span>
               <input className="search-input" value={learnerForm.code} onChange={(event) => updateLearnerForm('code', event.target.value)} />
             </label>
             <label className="form-field">
@@ -257,172 +415,173 @@ const AdminConnectionTimes = () => {
               <input className="search-input" value={learnerForm.formation} onChange={(event) => updateLearnerForm('formation', event.target.value)} />
             </label>
             <label className="form-field">
-              <span>Date debut contrat</span>
+              <span>Début du contrat</span>
               <input type="date" className="search-input" value={learnerForm.contractStartDate} onChange={(event) => updateLearnerForm('contractStartDate', event.target.value)} />
             </label>
             <label className="form-field">
-              <span>Date fin contrat</span>
+              <span>Fin du contrat</span>
               <input type="date" className="search-input" value={learnerForm.contractEndDate} onChange={(event) => updateLearnerForm('contractEndDate', event.target.value)} />
             </label>
           </div>
-        </section>
-        <div className="admin-form-actions">
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            <BiPlus size={18} />
-            Enregistrer l apprenant
-          </button>
-          {learnerForm.id && (
-            <button className="btn btn-secondary" type="button" onClick={resetLearnerForm}>Annuler</button>
-          )}
-        </div>
-      </form>
+          <div className="admin-form-actions">
+            <button className="btn btn-primary" type="submit" disabled={loading}>
+              <BiPlus size={18} />
+              {learnerForm.id ? 'Enregistrer' : 'Ajouter'}
+            </button>
+            {learnerForm.id && (
+              <button className="btn btn-secondary" type="button" onClick={resetLearnerForm}>Annuler</button>
+            )}
+          </div>
+        </form>
 
-      <div className="custom-card">
-        <h3 className="mb-3">Apprenants sauvegardes</h3>
-        <DataTable headers={['Nom', 'Code', 'Formation', 'Debut contrat', 'Fin contrat', 'Actions']}>
+        <DataTable className="admin-compact-table" headers={['Apprenant', 'Code', 'Formation', 'Contrat', 'Actions']}>
           {learners.length > 0 ? learners.map((learner) => (
-            <tr key={learner.id}>
+            <tr key={learner.id} className={selectedLearnerId === learner.id ? 'admin-selected-row' : ''}>
               <td><strong>{learner.name || learner.fullName}</strong></td>
               <td>{learner.code}</td>
               <td>{learner.formation}</td>
-              <td>{learner.contractStartDate || learner.contractStart}</td>
-              <td>{learner.contractEndDate || learner.contractEnd}</td>
+              <td>{learner.contractStartDate || learner.contractStart} au {learner.contractEndDate || learner.contractEnd}</td>
               <td>
                 <div className="admin-row-actions">
-                  <button className="btn btn-secondary" type="button" onClick={() => handleEditLearner(learner)}>Modifier</button>
-                  <button className="btn btn-secondary" type="button" onClick={() => handleDeleteLearner(learner.id)}>Supprimer</button>
-                  <button className="btn btn-primary" type="button" onClick={() => handleSelectLearnerForConnection(learner.id)}>
-                    Ajouter temps de connexion
-                  </button>
+                  <button className="btn btn-primary btn-compact" type="button" onClick={() => handleSelectLearnerForConnection(learner.id)}>Ajouter</button>
+                  <button className="btn btn-secondary btn-compact" type="button" onClick={() => handleEditLearner(learner)}>Modifier</button>
+                  <button className="btn btn-secondary btn-compact danger-text" type="button" onClick={() => handleDeleteLearner(learner.id)}>Supprimer</button>
                 </div>
               </td>
             </tr>
           )) : (
             <tr>
-              <td colSpan="6" className="text-center text-secondary" style={{ padding: '2rem' }}>
-                Aucun apprenant ajoute par l admin.
+              <td colSpan="5" className="text-center text-secondary" style={{ padding: '2rem' }}>
+                Aucun apprenant ajouté par l'admin.
               </td>
             </tr>
           )}
         </DataTable>
-      </div>
+      </section>
 
       {selectedLearner && (
-        <>
-          <form className="custom-card admin-stacked-form" onSubmit={handleSaveConnectionTime}>
-            <section className="admin-form-section">
-              <h3>Ajouter temps de connexion</h3>
-              <p className="text-secondary">{selectedLearner.name || selectedLearner.fullName} - {selectedLearner.code}</p>
-              <div className="admin-form-grid admin-session-form-grid">
-                <label className="form-field">
-                  <span>Semaine</span>
-                  <input className="search-input" value={connectionForm.week} onChange={(event) => updateConnectionForm('week', event.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>TP</span>
-                  <input className="search-input" value={connectionForm.tp} onChange={(event) => updateConnectionForm('tp', event.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>Date</span>
-                  <input type="date" className="search-input" value={connectionForm.date} onChange={(event) => updateConnectionForm('date', event.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>Jour</span>
-                  <input className="search-input" value={connectionForm.day} onChange={(event) => updateConnectionForm('day', event.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>Type</span>
-                  <select className="search-input" value={connectionForm.type} onChange={(event) => updateConnectionForm('type', event.target.value)}>
-                    <option value="ECOLE">ECOLE</option>
-                    <option value="ENTREPRISE">ENTREPRISE</option>
-                    <option value="FERIE">FERIE</option>
-                  </select>
-                </label>
-                <label className="form-field">
-                  <span>Presence</span>
-                  <select className="search-input" value={connectionForm.attendance} onChange={(event) => updateConnectionForm('attendance', event.target.value)}>
-                    <option value="PRESENT">Present</option>
-                    <option value="ABSENT">Absent</option>
-                  </select>
-                </label>
-                <label className="form-field admin-span-2">
-                  <span>Contenu</span>
-                  <input className="search-input" value={connectionForm.content} onChange={(event) => updateConnectionForm('content', event.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>Heure debut</span>
-                  <input type="time" step="1" className="search-input" value={connectionForm.startTime} onChange={(event) => updateConnectionForm('startTime', event.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>Heure fin</span>
-                  <input type="time" step="1" className="search-input" value={connectionForm.endTime} onChange={(event) => updateConnectionForm('endTime', event.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>Adresse IP</span>
-                  <input className="search-input" value={connectionForm.ipAddress} onChange={(event) => updateConnectionForm('ipAddress', event.target.value)} />
-                </label>
-                <div className="form-field">
-                  <span>Duree session</span>
-                  <strong className="admin-duration-preview">{connectionForm.attendance === 'ABSENT' ? '0h00' : getPreviewDuration(connectionForm) || '0h00'}</strong>
-                </div>
+        <section className="custom-card admin-section-card">
+          <div className="admin-section-heading">
+            <div>
+              <h3>Temps de connexion</h3>
+              <p className="text-secondary">{selectedLearner.name || selectedLearner.fullName} - code {selectedLearner.code}</p>
+            </div>
+            <div className="admin-section-summary">
+              <strong>{selectedConnectionTimes.length}</strong>
+              <span>session(s)</span>
+            </div>
+          </div>
+
+          <form className="admin-stacked-form admin-add-session-form" onSubmit={handleSaveConnectionTime}>
+            <div className="admin-form-grid admin-session-form-grid">
+              <label className="form-field">
+                <span>Semaine</span>
+                <input className="search-input" value={connectionForm.week} onChange={(event) => updateConnectionForm('week', event.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>Date</span>
+                <input required type="date" className="search-input" value={connectionForm.date} onChange={(event) => updateConnectionForm('date', event.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>Jour</span>
+                <input className="search-input" value={connectionForm.day} onChange={(event) => updateConnectionForm('day', event.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>Type</span>
+                <select className="search-input" value={connectionForm.type} onChange={(event) => updateConnectionForm('type', event.target.value)}>
+                  <option value="ECOLE">École</option>
+                  <option value="ENTREPRISE">Entreprise</option>
+                  <option value="FERIE">Férié</option>
+                </select>
+              </label>
+              <label className="form-field admin-span-2">
+                <span>Contenu</span>
+                <input className="search-input" value={connectionForm.content} onChange={(event) => updateConnectionForm('content', event.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>Heure de début</span>
+                <input required type="time" step="1" className="search-input" value={connectionForm.startTime} onChange={(event) => updateConnectionForm('startTime', event.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>Heure de fin</span>
+                <input required type="time" step="1" className="search-input" value={connectionForm.endTime} onChange={(event) => updateConnectionForm('endTime', event.target.value)} />
+              </label>
+              <div className="form-field">
+                <span>Durée recalculée</span>
+                <strong className="admin-duration-preview">{getPreviewDuration(connectionForm) || '0h00'}</strong>
               </div>
-            </section>
+            </div>
             <div className="admin-form-actions">
-              <button className="btn btn-primary" type="submit" disabled={loading}>
-                {connectionForm.id ? 'Mettre a jour' : 'Enregistrer la session'}
-              </button>
+              <button className="btn btn-primary" type="submit" disabled={loading}>Ajouter</button>
               <button className="btn btn-secondary" type="button" onClick={() => resetConnectionForm(connectionForm.learnerId)}>Annuler</button>
             </div>
           </form>
 
-          <div className="custom-card">
-            <h3 className="mb-3">Temps de connexion de {selectedLearner.name || selectedLearner.fullName}</h3>
-            <DataTable headers={['Semaine', 'TP', 'Date', 'Jour', 'Type', 'Presence', 'Contenu', 'Heure debut', 'Heure fin', 'Duree session', 'Adresse IP', 'Actions']}>
+          <div className="admin-random-panel">
+            <div className="admin-random-panel-header">
+              <div>
+                <h4>Pauses et absences aleatoires</h4>
+                <p className="text-secondary">Genere un apercu uniquement pour l'apprenant selectionne.</p>
+              </div>
+              <button className="btn btn-secondary" type="button" onClick={handlePreviewRandomPauses} disabled={loading || !selectedConnectionTimes.length}>
+                Generer pauses/absences aleatoires
+              </button>
+            </div>
+
+            {randomPreview && (
+              <div className="admin-random-preview">
+                <div className="admin-random-preview-header">
+                  <strong>Apercu avant enregistrement</strong>
+                  <span>{randomPreview.changes.length} changement(s)</span>
+                </div>
+                <DataTable className="admin-random-preview-table" headers={['Ancien horaire', 'Nouvel horaire', 'Motif']}>
+                  {randomPreview.changes.map((change) => (
+                    <tr key={change.id}>
+                      <td>{change.oldTime}</td>
+                      <td>{change.newTime}</td>
+                      <td>{change.reason}</td>
+                    </tr>
+                  ))}
+                </DataTable>
+                <div className="admin-form-actions">
+                  <button className="btn btn-primary" type="button" onClick={handleApplyRandomPauses} disabled={loading}>Enregistrer</button>
+                  <button className="btn btn-secondary" type="button" onClick={cancelRandomPreview}>Annuler</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <form id="connection-edit-form" onSubmit={handleSaveConnectionEdit}>
+            <DataTable className="admin-connection-table" headers={['Semaine', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Durée', 'Actions']}>
               {selectedConnectionTimes.length > 0 ? selectedConnectionTimes.map((entry) => (
-                <tr key={entry.id}>
-                  <td>{entry.week}</td>
-                  <td>{entry.tp || '-'}</td>
-                  <td>{entry.date}</td>
-                  <td>{entry.day}</td>
-                  <td>{entry.type}</td>
-                  <td>{entry.attendance === 'ABSENT' || entry.status === 'Absent' ? 'Absent' : 'Present'}</td>
-                  <td>{entry.content || entry.comment}</td>
-                  <td>{entry.startTime || '-'}</td>
-                  <td>{entry.endTime || '-'}</td>
-                  <td>{getDurationLabel(entry)}</td>
-                  <td>{entry.ipAddress || '-'}</td>
-                  <td>
-                    <div className="admin-row-actions">
-                      <button className="icon-button" type="button" title="Modifier" onClick={() => handleEditConnectionTime(entry)}>
-                        <BiEdit size={18} />
-                      </button>
-                      <button className="icon-button danger" type="button" title="Supprimer" onClick={() => handleDeleteConnectionTime(entry.id)}>
-                        <BiTrash size={18} />
-                      </button>
-                    </div>
-                  </td>
+                <tr key={entry.id} className={editingConnectionId === entry.id ? 'admin-editing-row' : ''}>
+                  {renderConnectionCells(entry)}
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="12" className="text-center text-secondary" style={{ padding: '2rem' }}>
+                  <td colSpan="9" className="text-center text-secondary" style={{ padding: '2rem' }}>
                     Aucun temps de connexion pour cet apprenant.
                   </td>
                 </tr>
               )}
             </DataTable>
-          </div>
-        </>
+          </form>
+        </section>
       )}
 
-      <div className="custom-card">
-        <h3 className="mb-3">Toutes les lignes de connexion</h3>
-        <DataTable headers={['Learner Name', 'Learner Code', 'Formation', 'Week', 'Date', 'Day', 'Type', 'Content', 'Start Time', 'End Time', 'Session Duration', 'IP Address', 'Status']}>
+      <section className="custom-card admin-section-card">
+        <div className="admin-section-heading">
+          <div>
+            <h3>Vue globale des connexions</h3>
+            <p className="text-secondary">Toutes les sessions sont classées par date puis heure de début.</p>
+          </div>
+        </div>
+        <DataTable className="admin-compact-table" headers={['Apprenant', 'Code', 'Formation', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Durée']}>
           {allConnectionRows.length > 0 ? allConnectionRows.map((entry) => (
             <tr key={entry.id}>
               <td><strong>{entry.learnerName || learners.find((learner) => learner.id === entry.learnerId)?.fullName || '-'}</strong></td>
               <td>{entry.learnerCode || '-'}</td>
               <td>{entry.formation || '-'}</td>
-              <td>{entry.week || '-'}</td>
               <td>{entry.date || '-'}</td>
               <td>{entry.day || '-'}</td>
               <td>{entry.type || '-'}</td>
@@ -430,18 +589,16 @@ const AdminConnectionTimes = () => {
               <td>{entry.startTime || '-'}</td>
               <td>{entry.endTime || '-'}</td>
               <td>{getDurationLabel(entry)}</td>
-              <td>{entry.ipAddress || '-'}</td>
-              <td>{entry.status || '-'}</td>
             </tr>
           )) : (
             <tr>
-              <td colSpan="13" className="text-center text-secondary" style={{ padding: '2rem' }}>
-                Aucun temps de connexion importe ou enregistre.
+              <td colSpan="10" className="text-center text-secondary" style={{ padding: '2rem' }}>
+                Aucun temps de connexion importé ou enregistré.
               </td>
             </tr>
           )}
         </DataTable>
-      </div>
+      </section>
     </div>
   );
 };
