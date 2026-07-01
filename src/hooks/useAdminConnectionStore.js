@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
+import bundledBackupState from '../data/adminDataBackup.json';
 import { cacheAdminState, getAdminState } from '../services/adminConnectionStore';
 import { loadBackupState, loadFirestoreStateOnce, subscribeToFirestoreState } from '../services/firebaseConnectionRepository';
+
+const bundledBackup = {
+  learners: bundledBackupState.learners || [],
+  planningDays: bundledBackupState.planningDays || [],
+  connectionTimes: bundledBackupState.connectionTimes || [],
+};
 
 const hasStateData = (adminState) => (
   adminState.learners.length > 0 ||
@@ -14,14 +21,24 @@ const loadRemoteOrBackupState = async () => {
   return loadBackupState();
 };
 
+const getInitialState = () => {
+  const adminState = getAdminState();
+  return hasStateData(adminState) ? adminState : bundledBackup;
+};
+
 const useAdminConnectionStore = () => {
   const [state, setState] = useState(() => {
-    const adminState = getAdminState();
+    const adminState = getInitialState();
     return { ...adminState, isLoading: !hasStateData(adminState) };
   });
 
   useEffect(() => {
     let mounted = true;
+    if (!hasStateData(getAdminState()) && hasStateData(bundledBackup)) {
+      cacheAdminState(bundledBackup);
+      setState({ ...bundledBackup, isLoading: false });
+    }
+
     const refresh = () => {
       const adminState = getAdminState();
       setState((current) => ({ ...adminState, isLoading: current.isLoading && !hasStateData(adminState) }));
@@ -57,7 +74,7 @@ const useAdminConnectionStore = () => {
     const unsubscribe = subscribeToFirestoreState((remoteState, metadata = {}) => {
       const currentState = getAdminState();
 
-      if (metadata.fromCache && metadata.isEmpty) {
+      if (metadata.isEmpty) {
         setState((current) => ({ ...currentState, isLoading: current.isLoading }));
         return;
       }
