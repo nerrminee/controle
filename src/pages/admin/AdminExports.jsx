@@ -2,6 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { BiFile, BiSpreadsheet } from 'react-icons/bi';
 import useAdminConnectionStore from '../../hooks/useAdminConnectionStore';
 import { exportExcelTable, printPdfReport } from '../../utils/tableImportExport';
+import {
+  formatDurationHHMMSS,
+  formatSessionTime,
+  sortChronological,
+  splitDateAndDay,
+} from '../../utils/attendanceDisplay';
 
 const minutesFromDuration = (duration) => {
   const match = String(duration || '').match(/(\d+)h\s*(\d+)?/);
@@ -21,12 +27,12 @@ const AdminExports = () => {
   const [error, setError] = useState('');
 
   const selectedLearner = learners.find((learner) => learner.id === learnerId);
-  const rows = useMemo(() => connectionTimes.filter((entry) => {
+  const rows = useMemo(() => sortChronological(connectionTimes.filter((entry) => {
     if (learnerId !== 'all' && entry.learnerId !== learnerId) return false;
     if (startDate && entry.date < startDate) return false;
     if (endDate && entry.date > endDate) return false;
     return true;
-  }), [connectionTimes, learnerId, startDate, endDate]);
+  })), [connectionTimes, learnerId, startDate, endDate]);
 
   const total = useMemo(() => formatMinutes(rows.reduce((sum, row) => sum + entryMinutes(row), 0)), [rows]);
   const period = `${startDate || 'debut'} - ${endDate || 'fin'}`;
@@ -34,19 +40,23 @@ const AdminExports = () => {
   const code = selectedLearner ? selectedLearner.code : 'Tous';
   const formation = selectedLearner ? selectedLearner.formation : 'Toutes formations';
 
-  const toExportRows = () => rows.map((entry) => ({
-    'Nom apprenant': entry.learnerName,
-    Code: entry.learnerCode,
-    Formation: entry.formation,
-    Date: entry.date,
-    Jour: entry.day,
-    Type: entry.type,
-    'Heure debut': entry.startTime || entry.morningLogin || '',
-    'Heure fin': entry.endTime || entry.afternoonLogout || '',
-    'Duree totale': entry.duration || formatMinutes(entry.durationMinutes || 0),
-    Statut: entry.status,
-    'Contenu / commentaire': entry.content || entry.comment,
-  }));
+  const toExportRows = () => rows.map((entry) => {
+    const displayDate = splitDateAndDay(entry.date, entry.day);
+
+    return {
+      'Nom apprenant': entry.learnerName,
+      Code: entry.learnerCode,
+      Formation: entry.formation,
+      Date: displayDate.date,
+      Jour: displayDate.day,
+      Type: entry.type,
+      'Heure debut': formatSessionTime(entry, 'startTime', 'morningLogin'),
+      'Heure fin': formatSessionTime(entry, 'endTime', 'afternoonLogout'),
+      'Duree totale': formatDurationHHMMSS(entry),
+      Statut: entry.status,
+      'Contenu / commentaire': entry.content || entry.comment,
+    };
+  });
 
   const handlePdf = () => {
     setError('');

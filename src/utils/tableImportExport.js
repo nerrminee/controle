@@ -1,3 +1,9 @@
+import {
+  formatDurationHHMMSS,
+  formatSessionTime,
+  splitDateAndDay,
+} from './attendanceDisplay.js';
+
 const parseDelimitedLine = (line, delimiter) => {
   const values = [];
   let value = '';
@@ -123,9 +129,17 @@ export const printPdfReport = ({ title, learnerLabel, code, formation, period, r
           body { font-family: Arial, sans-serif; color: #1f2937; padding: 28px; }
           h1 { font-size: 22px; margin: 0 0 16px; }
           .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; margin-bottom: 18px; font-size: 13px; }
-          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
           th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; vertical-align: top; }
           th { background: #f1f5f9; }
+          th:nth-child(1), td:nth-child(1) { width: 16%; white-space: nowrap; }
+          th:nth-child(2), td:nth-child(2) { width: 10%; white-space: nowrap; }
+          th:nth-child(3), td:nth-child(3) { width: 10%; white-space: nowrap; }
+          th:nth-child(4), td:nth-child(4),
+          th:nth-child(5), td:nth-child(5),
+          th:nth-child(6), td:nth-child(6) { width: 10%; white-space: nowrap; font-variant-numeric: tabular-nums; }
+          th:nth-child(7), td:nth-child(7) { width: 10%; }
+          th:nth-child(8), td:nth-child(8) { width: 24%; overflow-wrap: anywhere; }
           .footer { display: flex; justify-content: space-between; margin-top: 36px; font-size: 13px; }
           .signature { width: 260px; height: 80px; border-top: 1px solid #475569; padding-top: 8px; }
           @media print { button { display: none; } body { padding: 0; } }
@@ -147,18 +161,22 @@ export const printPdfReport = ({ title, learnerLabel, code, formation, period, r
             </tr>
           </thead>
           <tbody>
-            ${rows.map((row) => `
+            ${rows.map((row) => {
+              const displayDate = splitDateAndDay(row.date || row.Date, row.day || row.Jour);
+
+              return `
               <tr>
-                <td>${row.date}</td>
-                <td>${row.day}</td>
-                <td>${row.type}</td>
-                <td>${row.startTime || row.morningLogin || '-'}</td>
-                <td>${row.endTime || row.afternoonLogout || '-'}</td>
-                <td>${row.duration}</td>
-                <td>${row.status}</td>
-                <td>${row.content || row.comment || ''}</td>
+                <td>${displayDate.date}</td>
+                <td>${displayDate.day}</td>
+                <td>${row.type || row.Type || ''}</td>
+                <td>${formatSessionTime(row, 'startTime', 'morningLogin')}</td>
+                <td>${formatSessionTime(row, 'endTime', 'afternoonLogout')}</td>
+                <td>${formatDurationHHMMSS(row)}</td>
+                <td>${row.status || row.Statut || ''}</td>
+                <td>${row.content || row.comment || row['Contenu / commentaire'] || ''}</td>
               </tr>
-            `).join('')}
+            `;
+            }).join('')}
           </tbody>
         </table>
         <div class="footer">

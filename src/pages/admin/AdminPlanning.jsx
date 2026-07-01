@@ -4,6 +4,7 @@ import DataTable from '../../components/DataTable';
 import useAdminConnectionStore from '../../hooks/useAdminConnectionStore';
 import { deletePlanningDay, importPlanningDays, savePlanningDay } from '../../services/adminConnectionStore';
 import { readImportFile } from '../../utils/tableImportExport';
+import { sortChronological, splitDateAndDay } from '../../utils/attendanceDisplay';
 
 const emptyDay = {
   learnerId: '',
@@ -26,7 +27,7 @@ const AdminPlanning = () => {
 
   const learnerMap = useMemo(() => new Map(learners.map((learner) => [learner.id, learner])), [learners]);
   const filteredDays = useMemo(() => (
-    filterLearner === 'all' ? planningDays : planningDays.filter((day) => day.learnerId === filterLearner)
+    sortChronological(filterLearner === 'all' ? planningDays : planningDays.filter((day) => day.learnerId === filterLearner))
   ), [planningDays, filterLearner]);
 
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
@@ -142,25 +143,29 @@ const AdminPlanning = () => {
         </div>
       </form>
 
-      <DataTable headers={['Apprenant', 'S.', 'Date', 'Jour', 'Type', 'Ferie', 'Contenu / Statut', 'Source', 'Actions']}>
-        {filteredDays.map((day) => (
-          <tr key={day.id}>
-            <td><strong>{learnerMap.get(day.learnerId)?.fullName || '-'}</strong></td>
-            <td>{day.week}</td>
-            <td>{day.date}</td>
-            <td>{day.day}</td>
-            <td><span className="badge badge-success">{day.type}</span></td>
-            <td>{day.holiday ? 'Oui' : 'Non'}</td>
-            <td>{day.content}</td>
-            <td>{day.sourceFile || '-'}</td>
-            <td>
-              <div className="admin-row-actions">
-                <button className="icon-button" type="button" title="Modifier" onClick={() => setForm(day)}><BiEdit size={18} /></button>
-                <button className="icon-button danger" type="button" title="Supprimer" onClick={() => deletePlanningDay(day.id)}><BiTrash size={18} /></button>
-              </div>
-            </td>
-          </tr>
-        ))}
+      <DataTable className="admin-planning-table" headers={['Apprenant', 'S.', 'Date', 'Jour', 'Type', 'Ferie', 'Contenu / Statut', 'Source', 'Actions']}>
+        {filteredDays.map((day) => {
+          const displayDate = splitDateAndDay(day.date, day.day);
+
+          return (
+            <tr key={day.id}>
+              <td><strong>{learnerMap.get(day.learnerId)?.fullName || '-'}</strong></td>
+              <td>{day.week}</td>
+              <td>{displayDate.date}</td>
+              <td>{displayDate.day}</td>
+              <td><span className="badge badge-success">{day.type}</span></td>
+              <td>{day.holiday ? 'Oui' : 'Non'}</td>
+              <td>{day.content}</td>
+              <td>{day.sourceFile || '-'}</td>
+              <td>
+                <div className="admin-row-actions">
+                  <button className="icon-button" type="button" title="Modifier" onClick={() => setForm(day)}><BiEdit size={18} /></button>
+                  <button className="icon-button danger" type="button" title="Supprimer" onClick={() => deletePlanningDay(day.id)}><BiTrash size={18} /></button>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
       </DataTable>
     </div>
   );

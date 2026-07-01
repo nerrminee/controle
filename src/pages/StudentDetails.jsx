@@ -3,14 +3,24 @@ import { Link, useParams } from 'react-router-dom';
 import DataTable from '../components/DataTable';
 import useAdminConnectionStore from '../hooks/useAdminConnectionStore';
 import { BiArrowBack, BiBookOpen, BiBriefcase, BiCalendar, BiTimeFive, BiUser } from 'react-icons/bi';
+import {
+  formatDurationHHMMSS,
+  formatFrenchDate as formatAttendanceDate,
+  formatSessionTime,
+  formatType as formatAttendanceType,
+  isAbsentSession,
+  isNonConnectionType,
+  splitDateAndDay,
+  sortChronological,
+} from '../utils/attendanceDisplay';
 
 const StudentDetails = () => {
   const { id } = useParams();
   const { learners, connectionTimes, planningDays } = useAdminConnectionStore();
   const [expandedContentIds, setExpandedContentIds] = useState(new Set());
   const learner = learners.find((item) => item.id === id);
-  const learnerConnections = connectionTimes.filter((entry) => entry.learnerId === id);
-  const learnerPlanning = planningDays.filter((day) => day.learnerId === id);
+  const learnerConnections = sortChronological(connectionTimes.filter((entry) => entry.learnerId === id));
+  const learnerPlanning = sortChronological(planningDays.filter((day) => day.learnerId === id));
 
   if (!learner) {
     return (
@@ -35,12 +45,6 @@ const StudentDetails = () => {
   };
   const totalLabel = formatMinutes(totalDuration);
   const connectionSessionCount = learnerConnections.filter((entry) => entry.type === 'ECOLE' && entry.status === 'Present').length;
-  const formatFrenchDate = (value) => {
-    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
-    return value || '-';
-  };
-  const formatType = (type) => (type === 'ECOLE' ? 'ÉCOLE' : type === 'FERIE' ? 'FÉRIÉ' : type || '-');
   const toggleContent = (entryId) => {
     setExpandedContentIds((current) => {
       const next = new Set(current);
@@ -110,7 +114,7 @@ const StudentDetails = () => {
               <div>
                 <span className="text-secondary" style={{ fontSize: '0.8rem', display: 'block' }}>Periode de contrat</span>
                 <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <BiTimeFive size={16} /> {formatFrenchDate(learner.contractStart || learner.contractStartDate)} - {formatFrenchDate(learner.contractEnd || learner.contractEndDate)}
+                  <BiTimeFive size={16} /> {formatAttendanceDate(learner.contractStart || learner.contractStartDate)} - {formatAttendanceDate(learner.contractEnd || learner.contractEndDate)}
                 </span>
               </div>
             </div>
@@ -140,18 +144,20 @@ const StudentDetails = () => {
         <DataTable className="connection-history-table" headers={['Date', 'Jour', 'Type', 'Heure début', 'Heure fin', 'Durée', 'Adresse IP', 'Statut', 'Contenu']}>
           {learnerConnections.length > 0 ? learnerConnections.map((entry) => {
             const content = entry.content || entry.comment || '-';
+            const displayDate = splitDateAndDay(entry.date, entry.day);
             const isExpanded = expandedContentIds.has(entry.id);
             const canExpand = content.length > 130;
+            const mutedStatus = isAbsentSession(entry) || isNonConnectionType(entry);
 
             return (
               <tr key={entry.id}>
-                <td className="col-date">{formatFrenchDate(entry.date)}</td>
-                <td className="col-day">{entry.day}</td>
-                <td className="col-type"><span className="type-pill">{formatType(entry.type)}</span></td>
-                <td className="col-time">{entry.startTime || entry.morningLogin || '-'}</td>
-                <td className="col-time">{entry.endTime || entry.afternoonLogout || '-'}</td>
-                <td className="col-duration"><strong>{entry.duration || `${Math.floor((entry.durationMinutes || 0) / 60)}h ${String((entry.durationMinutes || 0) % 60).padStart(2, '0')}min`}</strong></td>
-                <td className="col-ip">{entry.ipAddress || '-'}</td>
+                <td className="col-date">{displayDate.date}</td>
+                <td className="col-day">{displayDate.day}</td>
+                <td className="col-type"><span className="type-pill">{formatAttendanceType(entry.type)}</span></td>
+                <td className="col-time">{formatSessionTime(entry, 'startTime', 'morningLogin')}</td>
+                <td className="col-time">{formatSessionTime(entry, 'endTime', 'afternoonLogout')}</td>
+                <td className="col-duration"><strong>{formatDurationHHMMSS(entry)}</strong></td>
+                <td className="col-ip">{mutedStatus ? '' : entry.ipAddress || ''}</td>
                 <td className="col-status"><span className={`badge compact-badge ${entry.status === 'Present' ? 'badge-success' : 'badge-warning'}`}>{entry.status}</span></td>
                 <td className="col-content">
                   <div className={`history-content ${isExpanded ? 'expanded' : ''}`}>{content}</div>

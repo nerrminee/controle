@@ -4,6 +4,7 @@ import {
   deletePlanningDayFromFirestore,
   mirrorStateToFirestore,
 } from './firebaseConnectionRepository';
+import { sortChronological } from '../utils/attendanceDisplay';
 
 const STORAGE_KEY = 'controle.connectionAdmin.v1';
 const ADMIN_KEY = 'controle.admin.authenticated';
@@ -55,24 +56,8 @@ const toMinutes = (time) => {
 
 const nowIso = () => new Date().toISOString();
 
-const compareConnectionTimes = (first, second) => {
-  const firstKey = [
-    first.date || '',
-    first.startTime || '',
-    first.learnerName || '',
-    first.id || '',
-  ].join('|');
-  const secondKey = [
-    second.date || '',
-    second.startTime || '',
-    second.learnerName || '',
-    second.id || '',
-  ].join('|');
-
-  return firstKey.localeCompare(secondKey);
-};
-
-const sortConnectionTimes = (connectionTimes = []) => [...connectionTimes].sort(compareConnectionTimes);
+const sortConnectionTimes = (connectionTimes = []) => sortChronological(connectionTimes);
+const sortPlanningDays = (planningDays = []) => sortChronological(planningDays);
 
 const parseFrenchDate = (date) => {
   const match = String(date || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
@@ -222,10 +207,30 @@ const initialState = {
 
 const seedIds = new Set(['learner-alexandre-maxime']);
 
+const sanitizeConnectionEntry = (entry) => {
+  const isAbsent = entry?.attendance === 'ABSENT' || entry?.status === 'Absent';
+  if (!isAbsent) return entry;
+
+  return {
+    ...entry,
+    startTime: '',
+    endTime: '',
+    ipAddress: '',
+    durationMinutes: 0,
+    durationSeconds: 0,
+    duration: formatDurationMinutes(0),
+    durationFormatted: formatDurationSeconds(0),
+    attendance: 'ABSENT',
+    status: 'Absent',
+  };
+};
+
 const sanitizeState = (state) => ({
   learners: (state.learners || []).filter((learner) => !seedIds.has(learner.id)),
   planningDays: (state.planningDays || []).filter((day) => !seedIds.has(day.learnerId)),
-  connectionTimes: (state.connectionTimes || []).filter((entry) => !seedIds.has(entry.learnerId)),
+  connectionTimes: (state.connectionTimes || [])
+    .filter((entry) => !seedIds.has(entry.learnerId))
+    .map(sanitizeConnectionEntry),
 });
 
 const readState = () => {
@@ -240,6 +245,7 @@ const readState = () => {
 const writeState = (state) => {
   const sortedState = {
     ...state,
+    planningDays: sortPlanningDays(state.planningDays),
     connectionTimes: sortConnectionTimes(state.connectionTimes),
   };
 
@@ -264,6 +270,7 @@ export const cacheAdminState = (state) => {
   const cleanState = sanitizeState(state);
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     ...cleanState,
+    planningDays: sortPlanningDays(cleanState.planningDays),
     connectionTimes: sortConnectionTimes(cleanState.connectionTimes),
   }));
   window.dispatchEvent(new Event('connection-admin-store-updated'));
@@ -588,10 +595,14 @@ const recalculateSingleSession = (entry) => {
 
   return {
     ...entry,
+    startTime: isAbsent ? '' : entry.startTime,
+    endTime: isAbsent ? '' : entry.endTime,
+    ipAddress: isAbsent ? '' : String(entry.ipAddress || '').trim(),
     durationMinutes,
     durationSeconds,
     duration: formatDurationMinutes(durationMinutes),
     durationFormatted: formatDurationSeconds(durationSeconds),
+    attendance: isAbsent ? 'ABSENT' : (entry.attendance || 'PRESENT'),
     status: isAbsent ? 'Absent' : entry.type === 'ENTREPRISE' ? 'En entreprise' : entry.type === 'FERIE' ? 'Ferie' : 'Present',
     updatedAt: nowIso(),
   };
@@ -629,8 +640,9 @@ const buildRandomAdjustment = (entry, index) => {
   if (type === 'skip-afternoon') {
     const replacement = recalculateSingleSession({
       ...entry,
-      startTime: secondsToTime(window.start + randomInt(0, 59)),
-      endTime: secondsToTime(window.end - randomInt(0, 59)),
+      startTime: '',
+      endTime: '',
+      ipAddress: '',
       attendance: 'ABSENT',
       status: 'Absent',
       pauseReason: baseReason,
@@ -823,7 +835,7 @@ export const createConnectionTime = (entry) => {
     throw new Error('La date est obligatoire.');
   }
 
-  if (!startTime || !endTime) {
+  if (!isAbsent && (!startTime || !endTime)) {
     throw new Error('Heure debut et heure fin sont obligatoires.');
   }
 
@@ -848,14 +860,14 @@ export const createConnectionTime = (entry) => {
     type,
     content: String(entry.content || '').trim(),
     comment: String(entry.content || entry.comment || '').trim(),
-    startTime,
-    endTime,
+    startTime: isAbsent ? '' : startTime,
+    endTime: isAbsent ? '' : endTime,
     attendance,
     durationMinutes,
     durationSeconds,
     duration: formatDurationMinutes(durationMinutes),
     durationFormatted: formatDurationSeconds(durationSeconds),
-    ipAddress: String(entry.ipAddress || '').trim() || (type === 'ECOLE' && !isAbsent ? randomIpv4(usedIps) : ''),
+    ipAddress: isAbsent ? '' : String(entry.ipAddress || '').trim() || (type === 'ECOLE' ? randomIpv4(usedIps) : ''),
     status: isAbsent ? 'Absent' : type === 'ECOLE' ? 'Present' : type === 'ENTREPRISE' ? 'En entreprise' : 'Férié',
     createdAt: entry.createdAt || existingEntry?.createdAt || nowIso(),
     updatedAt: nowIso(),

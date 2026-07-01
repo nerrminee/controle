@@ -4,6 +4,13 @@ import DataTable from '../components/DataTable';
 import useAdminConnectionStore from '../hooks/useAdminConnectionStore';
 import { trainers } from '../data/trainers';
 import { BiAward, BiGroup, BiLogInCircle, BiTimeFive } from 'react-icons/bi';
+import {
+  formatDurationHHMMSS,
+  formatFrenchDate,
+  formatSessionTime,
+  compareChronological,
+  splitDateAndDay,
+} from '../utils/attendanceDisplay';
 
 const minutesFromDuration = (duration) => {
   const match = String(duration || '').match(/(\d+)h\s*(\d+)?/);
@@ -28,7 +35,7 @@ const Dashboard = () => {
   ), [connectionTimes]);
   const latestConnections = useMemo(() => (
     [...connectionTimes]
-      .sort((a, b) => `${b.date} ${b.startTime || b.morningLogin || ''}`.localeCompare(`${a.date} ${a.startTime || a.morningLogin || ''}`))
+      .sort((first, second) => compareChronological(second, first))
       .slice(0, 5)
   ), [connectionTimes]);
 
@@ -78,16 +85,20 @@ const Dashboard = () => {
             <span className="text-secondary" style={{ fontSize: '0.8rem' }}>Base admin</span>
           </div>
 
-          <DataTable headers={['Date', 'Apprenant', 'Connexion', 'Deconnexion', 'Duree']}>
-            {latestConnections.length > 0 ? latestConnections.map((entry) => (
-              <tr key={entry.id}>
-                <td>{entry.date}</td>
-                <td><strong>{entry.learnerName}</strong></td>
-                <td><span className="badge badge-success">{entry.startTime || entry.morningLogin || '-'}</span></td>
-                <td><span className="badge badge-warning">{entry.endTime || entry.afternoonLogout || '-'}</span></td>
-                <td>{entry.duration || formatMinutes(entry.durationMinutes || 0)}</td>
-              </tr>
-            )) : (
+          <DataTable className="dashboard-connections-table" headers={['Date', 'Apprenant', 'Connexion', 'Deconnexion', 'Duree']}>
+            {latestConnections.length > 0 ? latestConnections.map((entry) => {
+              const displayDate = splitDateAndDay(entry.date, entry.day);
+
+              return (
+                <tr key={entry.id}>
+                  <td className="col-date">{formatFrenchDate(displayDate.date)}</td>
+                  <td><strong>{entry.learnerName}</strong></td>
+                  <td className="col-time"><span className="badge badge-success">{formatSessionTime(entry, 'startTime', 'morningLogin')}</span></td>
+                  <td className="col-time"><span className="badge badge-warning">{formatSessionTime(entry, 'endTime', 'afternoonLogout')}</span></td>
+                  <td className="col-duration">{formatDurationHHMMSS(entry)}</td>
+                </tr>
+              );
+            }) : (
               <tr>
                 <td colSpan="5" className="text-center text-secondary" style={{ padding: '2rem' }}>
                   Aucun temps de connexion genere pour le moment.

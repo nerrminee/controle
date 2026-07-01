@@ -15,6 +15,14 @@ import {
   updateLearner,
 } from '../../services/adminConnectionStore';
 import { readImportFile } from '../../utils/tableImportExport';
+import {
+  formatDurationHHMMSS,
+  formatSessionTime,
+  isAbsentSession,
+  compareChronological,
+  splitDateAndDay,
+  sortChronological,
+} from '../../utils/attendanceDisplay';
 
 const emptyLearner = {
   name: '',
@@ -44,22 +52,13 @@ const toMinutes = (time) => {
   return (hours * 60) + minutes;
 };
 
-const sortByDateAndStartTime = (first, second) => (
-  `${first.date || ''}-${first.startTime || ''}-${first.id || ''}`
-    .localeCompare(`${second.date || ''}-${second.startTime || ''}-${second.id || ''}`)
-);
-
 const getPreviewDuration = (entry) => {
+  if (entry.attendance === 'ABSENT' || entry.status === 'Absent') return '0h00';
   if (!entry.startTime || !entry.endTime) return '';
   const duration = toMinutes(entry.endTime) - toMinutes(entry.startTime);
   if (duration <= 0) return 'Erreur';
-  return entry.attendance === 'ABSENT' ? '0h00' : formatDurationMinutes(duration);
+  return formatDurationMinutes(duration);
 };
-
-const getDurationLabel = (entry) => (
-  entry.durationFormatted ||
-  (/^\d{2}:\d{2}:\d{2}$/.test(entry.duration || '') ? entry.duration : formatDurationMinutes(entry.durationMinutes || 0))
-);
 
 const buildConnectionDraft = (entry) => ({
   id: entry.id,
@@ -94,14 +93,10 @@ const AdminConnectionTimes = () => {
     selectedLearnerId
       ? connectionTimes
         .filter((entry) => entry.learnerId === selectedLearnerId)
-        .sort(sortByDateAndStartTime)
+        .sort(compareChronological)
       : []
   ), [connectionTimes, selectedLearnerId]);
-  const allConnectionRows = useMemo(() => [...connectionTimes].sort((first, second) => {
-    const byDate = sortByDateAndStartTime(first, second);
-    if (byDate !== 0) return byDate;
-    return `${first.learnerName || ''}`.localeCompare(`${second.learnerName || ''}`);
-  }), [connectionTimes]);
+  const allConnectionRows = useMemo(() => sortChronological(connectionTimes), [connectionTimes]);
 
   const resetLearnerForm = () => setLearnerForm(emptyLearner);
   const resetConnectionForm = (learnerId = selectedLearnerId) => {
@@ -314,18 +309,20 @@ const AdminConnectionTimes = () => {
   const renderConnectionCells = (entry) => {
     const isEditing = editingConnectionId === entry.id;
     const form = isEditing ? editingConnectionForm : entry;
+    const isAbsent = isAbsentSession(form);
+    const displayDate = splitDateAndDay(entry.date, entry.day);
 
     if (!isEditing) {
       return (
         <>
           <td>{entry.week}</td>
-          <td>{entry.date}</td>
-          <td>{entry.day}</td>
+          <td>{displayDate.date}</td>
+          <td>{displayDate.day}</td>
           <td>{entry.type}</td>
           <td>{entry.content || entry.comment}</td>
-          <td>{entry.startTime || '-'}</td>
-          <td>{entry.endTime || '-'}</td>
-          <td>{getDurationLabel(entry)}</td>
+          <td>{formatSessionTime(entry, 'startTime')}</td>
+          <td>{formatSessionTime(entry, 'endTime')}</td>
+          <td>{formatDurationHHMMSS(entry)}</td>
           <td>
             <div className="admin-row-actions admin-row-actions-nowrap">
               <button className="btn btn-secondary btn-compact" type="button" onClick={() => handleEditConnectionTime(entry)}>Modifier</button>
@@ -358,10 +355,10 @@ const AdminConnectionTimes = () => {
           <input className="search-input admin-table-input admin-table-input-wide" value={form.content} onChange={(event) => updateEditingConnectionForm('content', event.target.value)} />
         </td>
         <td>
-          <input required type="time" step="1" className="search-input admin-table-input" value={form.startTime} onChange={(event) => updateEditingConnectionForm('startTime', event.target.value)} />
+          <input required={!isAbsent} disabled={isAbsent} type="time" step="1" className="search-input admin-table-input" value={isAbsent ? '' : form.startTime} onChange={(event) => updateEditingConnectionForm('startTime', event.target.value)} />
         </td>
         <td>
-          <input required type="time" step="1" className="search-input admin-table-input" value={form.endTime} onChange={(event) => updateEditingConnectionForm('endTime', event.target.value)} />
+          <input required={!isAbsent} disabled={isAbsent} type="time" step="1" className="search-input admin-table-input" value={isAbsent ? '' : form.endTime} onChange={(event) => updateEditingConnectionForm('endTime', event.target.value)} />
         </td>
         <td><strong className="admin-duration-preview">{getPreviewDuration(form) || '0h00'}</strong></td>
         <td>
@@ -576,21 +573,25 @@ const AdminConnectionTimes = () => {
             <p className="text-secondary">Toutes les sessions sont classées par date puis heure de début.</p>
           </div>
         </div>
-        <DataTable className="admin-compact-table" headers={['Apprenant', 'Code', 'Formation', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Durée']}>
-          {allConnectionRows.length > 0 ? allConnectionRows.map((entry) => (
-            <tr key={entry.id}>
-              <td><strong>{entry.learnerName || learners.find((learner) => learner.id === entry.learnerId)?.fullName || '-'}</strong></td>
-              <td>{entry.learnerCode || '-'}</td>
-              <td>{entry.formation || '-'}</td>
-              <td>{entry.date || '-'}</td>
-              <td>{entry.day || '-'}</td>
-              <td>{entry.type || '-'}</td>
-              <td>{entry.content || entry.comment || '-'}</td>
-              <td>{entry.startTime || '-'}</td>
-              <td>{entry.endTime || '-'}</td>
-              <td>{getDurationLabel(entry)}</td>
-            </tr>
-          )) : (
+        <DataTable className="admin-compact-table admin-global-connection-table" headers={['Apprenant', 'Code', 'Formation', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Durée']}>
+          {allConnectionRows.length > 0 ? allConnectionRows.map((entry) => {
+            const displayDate = splitDateAndDay(entry.date, entry.day);
+
+            return (
+              <tr key={entry.id}>
+                <td><strong>{entry.learnerName || learners.find((learner) => learner.id === entry.learnerId)?.fullName || '-'}</strong></td>
+                <td>{entry.learnerCode || '-'}</td>
+                <td>{entry.formation || '-'}</td>
+                <td>{displayDate.date}</td>
+                <td>{displayDate.day}</td>
+                <td>{entry.type || '-'}</td>
+                <td>{entry.content || entry.comment || '-'}</td>
+                <td>{formatSessionTime(entry, 'startTime')}</td>
+                <td>{formatSessionTime(entry, 'endTime')}</td>
+                <td>{formatDurationHHMMSS(entry)}</td>
+              </tr>
+            );
+          }) : (
             <tr>
               <td colSpan="10" className="text-center text-secondary" style={{ padding: '2rem' }}>
                 Aucun temps de connexion importé ou enregistré.
