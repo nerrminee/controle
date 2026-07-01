@@ -1,75 +1,72 @@
 import React from 'react';
 import { BiFile, BiDownload } from 'react-icons/bi';
+import { SCHOOL_NAME } from '../config/school';
 
 const Documents = () => {
   const docsList = [
     {
       id: 1,
-      title: "Règlement Intérieur",
-      description: "Charte de bonne conduite, droits et devoirs des apprenants au sein du centre CONTROLE.",
-      type: "PDF",
-      size: "240 Ko"
+      title: 'Reglement Interieur',
+      description: `Charte de bonne conduite, droits et devoirs des apprenants au sein de ${SCHOOL_NAME}.`,
+      type: 'PDF',
+      size: '240 Ko',
     },
     {
       id: 2,
-      title: "Calendrier Pédagogique 2026",
-      description: "Dates clés, périodes en entreprise, examens et jours fériés de l'année scolaire en cours.",
-      type: "PDF",
-      size: "1.4 Mo"
+      title: 'Calendrier Pedagogique 2026',
+      description: "Dates cles, periodes en entreprise, examens et jours feries de l'annee scolaire en cours.",
+      type: 'PDF',
+      size: '1.4 Mo',
     },
     {
       id: 3,
       title: "Guide d'Accueil de l'Apprenant",
-      description: "Informations pratiques sur la vie de l'école, les outils numériques et le suivi pédagogique.",
-      type: "PDF",
-      size: "3.2 Mo"
+      description: "Informations pratiques sur la vie de l'ecole, les outils numeriques et le suivi pedagogique.",
+      type: 'PDF',
+      size: '3.2 Mo',
     },
     {
       id: 4,
-      title: "Modèle de Livret de Stage",
-      description: "Document de suivi de stage en entreprise à faire remplir par le tuteur de stage.",
-      type: "Word",
-      size: "180 Ko"
+      title: 'Modele de Livret de Stage',
+      description: 'Document de suivi de stage en entreprise a faire remplir par le tuteur de stage.',
+      type: 'Word',
+      size: '180 Ko',
     },
     {
       id: 5,
-      title: "Fiche d'Évaluation de Fin de Cycle",
-      description: "Critères d'évaluation de la formation pour l'obtention de la certification.",
-      type: "PDF",
-      size: "450 Ko"
-    }
+      title: 'Fiche Evaluation de Fin de Cycle',
+      description: "Criteres d'evaluation de la formation pour l'obtention de la certification.",
+      type: 'PDF',
+      size: '450 Ko',
+    },
   ];
 
-  // Helper to dynamically generate a text file simulating a PDF/Word download
   const downloadDoc = (title, type) => {
     const fileContent = `==================================================
-CENTRE DE FORMATION CONTROLE - ESPACE APPRENANT
+${SCHOOL_NAME.toUpperCase()} - ESPACE APPRENANT
 ==================================================
 
 Document : ${title}
 Format initial : ${type}
-Date de téléchargement : ${new Date().toLocaleDateString('fr-FR')}
+Date de telechargement : ${new Date().toLocaleDateString('fr-FR')}
 
-Ceci est un document administratif / pédagogique officiel fourni par l'établissement de formation CONTROLE.
+Ceci est un document administratif / pedagogique officiel fourni par ${SCHOOL_NAME}.
 
-Pour toute question ou réclamation concernant ce document, veuillez vous adresser au secrétariat de l'école.
+Pour toute question ou reclamation concernant ce document, veuillez vous adresser au secretariat de l'ecole.
 
 --------------------------------------------------
-CONTROLE - Gestion des Apprenants
+${SCHOOL_NAME} - Gestion des Apprenants
 C:\\Users\\Mebrouka\\Desktop\\rch\\controle
 `;
 
     const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
-    
-    // Choose file extension based on type
     const ext = type.toLowerCase() === 'word' ? 'docx' : 'pdf';
-    // Format filename to avoid spaces
     const safeName = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    link.href = url;
     link.download = `${safeName}.${ext}`;
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -79,9 +76,9 @@ C:\\Users\\Mebrouka\\Desktop\\rch\\controle
   return (
     <div className="documents-page">
       <div className="mb-3">
-        <h2 className="section-title">Documents Pédagogiques & Administratifs</h2>
+        <h2 className="section-title">Documents Pedagogiques & Administratifs</h2>
         <p className="text-secondary" style={{ fontSize: '0.9rem' }}>
-          Téléchargez les documents essentiels pour le bon déroulement de votre parcours de formation.
+          Telechargez les documents essentiels pour le bon deroulement de votre parcours de formation.
         </p>
       </div>
 
@@ -99,18 +96,19 @@ C:\\Users\\Mebrouka\\Desktop\\rch\\controle
                 </span>
               </div>
             </div>
-            
+
             <p className="text-secondary" style={{ fontSize: '0.85rem', flex: 1, marginBottom: '1.5rem' }}>
               {doc.description}
             </p>
 
-            <button 
-              onClick={() => downloadDoc(doc.title, doc.type)} 
-              className="btn btn-primary" 
+            <button
+              onClick={() => downloadDoc(doc.title, doc.type)}
+              className="btn btn-primary"
+              type="button"
               style={{ display: 'inline-flex', gap: '0.5rem', width: '100%', padding: '0.5rem 1rem' }}
             >
               <BiDownload size={16} />
-              <span>Télécharger</span>
+              <span>Telecharger</span>
             </button>
           </div>
         ))}

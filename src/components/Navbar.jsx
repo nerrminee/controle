@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BiLogOut, BiMenu, BiUserCircle } from 'react-icons/bi';
 import { isAdminAuthenticated, logoutAdmin } from '../services/adminConnectionStore';
+import { SCHOOL_NAME } from '../config/school';
 
 const Navbar = ({ onToggleSidebar }) => {
   const location = useLocation();
@@ -22,7 +23,7 @@ const Navbar = ({ onToggleSidebar }) => {
     if (path === '/admin/planning') return 'Admin - Planning';
     if (path === '/admin/connection-times') return 'Admin - Temps de connexion';
     if (path === '/admin/exports') return 'Admin - Exports';
-    if (path === '/about') return 'A Propos de CONTROLE';
+    if (path === '/about') return `A Propos de ${SCHOOL_NAME}`;
     return params.id ? "Details de l'Apprenant" : 'Portail Scolaire';
   };
 
@@ -51,7 +52,7 @@ const Navbar = ({ onToggleSidebar }) => {
         </div>
         <div className="user-profile">
           <div className="user-info">
-            <span className="user-name">Admin CONTROLE</span>
+            <span className="user-name">Admin {SCHOOL_NAME}</span>
             <span className="user-role">Secretariat</span>
           </div>
           <BiUserCircle size={36} className="user-avatar" />

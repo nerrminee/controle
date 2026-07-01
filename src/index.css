@@ -210,9 +210,11 @@ h3 { font-size: 1.15rem; }
 .sidebar-brand {
   font-family: 'Poppins', sans-serif;
   font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: 1px;
+  font-size: 0.95rem;
+  letter-spacing: 0;
+  line-height: 1.2;
   color: #FFFFFF;
+  max-width: 155px;
 }
 
 .sidebar-close-btn {

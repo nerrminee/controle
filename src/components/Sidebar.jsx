@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import logo from '../assets/logo.png';
+import { SCHOOL_NAME } from '../config/school';
 import { 
   BiLayout, 
   BiGroup, 
@@ -26,8 +27,8 @@ const Sidebar = ({ isOpen, onClose }) => {
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo-container">
-            <img src={logo} alt="CONTROLE Logo" className="sidebar-logo" />
-            <span className="sidebar-brand">CONTROLE</span>
+            <img src={logo} alt={`${SCHOOL_NAME} logo`} className="sidebar-logo" />
+            <span className="sidebar-brand">{SCHOOL_NAME}</span>
           </div>
           <button className="sidebar-close-btn" onClick={onClose} aria-label="Fermer le menu">
             <BiX size={24} />
