@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
 // Layout components
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import AdminRoute from './components/AdminRoute';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -15,6 +16,10 @@ import Trainers from './pages/Trainers';
 import Companies from './pages/Companies';
 import Documents from './pages/Documents';
 import About from './pages/About';
+import AdminLearners from './pages/admin/AdminLearners';
+import AdminPlanning from './pages/admin/AdminPlanning';
+import AdminConnectionTimes from './pages/admin/AdminConnectionTimes';
+import AdminExports from './pages/admin/AdminExports';
 
 /**
  * Root application component.
@@ -51,6 +56,17 @@ function App() {
             <Route path="/companies" element={<Companies />} />
             <Route path="/documents" element={<Documents />} />
             <Route path="/about" element={<About />} />
+
+            {/* Admin connection-time workflow */}
+            <Route path="/admin/login" element={<AdminRoute />} />
+            <Route path="/admin" element={<AdminRoute />}>
+              <Route index element={<Navigate to="/admin/connection-times" replace />} />
+              <Route path="add-learner" element={<AdminLearners />} />
+              <Route path="learners" element={<AdminLearners />} />
+              <Route path="planning" element={<AdminPlanning />} />
+              <Route path="connection-times" element={<AdminConnectionTimes />} />
+              <Route path="exports" element={<AdminExports />} />
+            </Route>
 
             {/* Fallback for unmatched routes */}
             <Route path="*" element={

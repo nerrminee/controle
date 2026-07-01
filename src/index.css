@@ -264,6 +264,15 @@ h3 { font-size: 1.15rem; }
   opacity: 1;
 }
 
+.sidebar-section-label {
+  padding: 0.75rem 1rem 0.25rem;
+  color: #AFC2D8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .sidebar-footer {
   padding: 1rem 1.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -350,6 +359,28 @@ h3 { font-size: 1.15rem; }
 .user-avatar {
   color: var(--text-secondary);
   cursor: pointer;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-color);
+  background: #FFFFFF;
+  color: var(--text-primary);
+  border-radius: var(--radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.icon-button:hover {
+  background-color: #EDF2F7;
+}
+
+.icon-button.danger {
+  color: var(--danger);
 }
 
 /* --- 3. Card Styles --- */
