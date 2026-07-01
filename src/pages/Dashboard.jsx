@@ -12,12 +12,19 @@ const minutesFromDuration = (duration) => {
 
 const entryMinutes = (entry) => entry.durationMinutes || minutesFromDuration(entry.duration);
 
-const formatMinutes = (minutes) => `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}min`;
+const formatMinutes = (minutes) => {
+  const roundedMinutes = Math.round(minutes || 0);
+  return `${Math.floor(roundedMinutes / 60)}h ${String(roundedMinutes % 60).padStart(2, '0')}min`;
+};
 
 const Dashboard = () => {
   const { learners, connectionTimes } = useAdminConnectionStore();
-  const totalConnectionTime = useMemo(() => (
-    formatMinutes(connectionTimes.reduce((total, entry) => total + entryMinutes(entry), 0))
+  const totalConnectionMinutes = useMemo(() => (
+    connectionTimes.reduce((total, entry) => total + entryMinutes(entry), 0)
+  ), [connectionTimes]);
+  const totalConnectionTime = useMemo(() => formatMinutes(totalConnectionMinutes), [totalConnectionMinutes]);
+  const connectionSessionCount = useMemo(() => (
+    connectionTimes.filter((entry) => entry.type === 'ECOLE' && entry.status === 'Present').length
   ), [connectionTimes]);
   const latestConnections = useMemo(() => (
     [...connectionTimes]
@@ -42,10 +49,23 @@ const Dashboard = () => {
         />
         <Card
           title="Temps de Connexion"
-          value={totalConnectionTime}
+          value={connectionSessionCount}
           icon={<BiTimeFive size={24} />}
-          description="Volume genere"
+          description="Sessions ECOLE"
         />
+      </div>
+
+      <div className="dashboard-summary-strip">
+        <div className="dashboard-summary-card">
+          <span>Volume horaire total</span>
+          <strong>{totalConnectionTime}</strong>
+          <small>Duree cumulee des connexions</small>
+        </div>
+        <div className="dashboard-summary-card">
+          <span>Temps de Connexion</span>
+          <strong>{connectionSessionCount}</strong>
+          <small>Session(s) ECOLE enregistree(s)</small>
+        </div>
       </div>
 
       <div className="grid-two-cols">

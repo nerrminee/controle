@@ -29,7 +29,12 @@ const StudentDetails = () => {
     const match = String(entry.duration || '').match(/(\d+)h\s*(\d+)?/);
     return total + (match ? (Number(match[1]) * 60) + Number(match[2] || 0) : 0);
   }, 0);
-  const totalLabel = `${Math.floor(totalDuration / 60)}h ${String(totalDuration % 60).padStart(2, '0')}min`;
+  const formatMinutes = (minutes) => {
+    const roundedMinutes = Math.round(minutes || 0);
+    return `${Math.floor(roundedMinutes / 60)}h ${String(roundedMinutes % 60).padStart(2, '0')}min`;
+  };
+  const totalLabel = formatMinutes(totalDuration);
+  const connectionSessionCount = learnerConnections.filter((entry) => entry.type === 'ECOLE' && entry.status === 'Present').length;
   const formatFrenchDate = (value) => {
     const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (match) return `${match[3]}/${match[2]}/${match[1]}`;
@@ -56,6 +61,19 @@ const StudentDetails = () => {
           <span>Retour aux Apprenants</span>
         </Link>
         <span className="text-secondary" style={{ fontSize: '0.9rem' }}>Fiche issue de la base admin</span>
+      </div>
+
+      <div className="student-summary-strip">
+        <div className="student-summary-card">
+          <span>Volume horaire total</span>
+          <strong>{totalLabel}</strong>
+          <small>Duree cumulee des sessions</small>
+        </div>
+        <div className="student-summary-card">
+          <span>Temps de connexion</span>
+          <strong>{connectionSessionCount}</strong>
+          <small>Session(s) ECOLE enregistree(s)</small>
+        </div>
       </div>
 
       <div className="grid-two-cols-equal student-details-summary">
@@ -90,9 +108,9 @@ const StudentDetails = () => {
                 <span style={{ fontWeight: '600' }}>{learner.level || '-'}</span>
               </div>
               <div>
-                <span className="text-secondary" style={{ fontSize: '0.8rem', display: 'block' }}>Volume horaire total</span>
+                <span className="text-secondary" style={{ fontSize: '0.8rem', display: 'block' }}>Periode de contrat</span>
                 <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <BiTimeFive size={16} /> {totalLabel}
+                  <BiTimeFive size={16} /> {formatFrenchDate(learner.contractStart || learner.contractStartDate)} - {formatFrenchDate(learner.contractEnd || learner.contractEndDate)}
                 </span>
               </div>
             </div>
