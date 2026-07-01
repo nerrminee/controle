@@ -33,6 +33,12 @@ const randomTimeWithSeconds = (hour, minuteStart, minuteEnd) => (
 );
 
 const randomSecondOffset = (minutes) => (minutes * 60) + randomInt(0, 59);
+const formatPauseDuration = (seconds) => {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (!minutes) return `${rest}s`;
+  return rest ? `${minutes}min ${rest}s` : `${minutes}min`;
+};
 
 const timeToSeconds = (time) => {
   if (!time || !time.includes(':')) return 0;
@@ -705,12 +711,17 @@ const buildRandomAdjustment = (entry, index) => {
     };
   }
 
-  if (availableSeconds < 45 * 60) return null;
+  if (availableSeconds < 8 * 60) return null;
 
-  const pauseMinutes = [2, 5, 10, 15][randomInt(0, 3)];
-  const pauseDuration = randomSecondOffset(pauseMinutes);
-  const earliestPause = safeStart + (35 * 60);
-  const latestPause = safeEnd - pauseDuration - (25 * 60);
+  const maxPauseDuration = Math.min(10 * 60, availableSeconds - (2 * 90));
+  if (maxPauseDuration < 30) return null;
+
+  const pauseDuration = randomInt(30, maxPauseDuration);
+  const pauseLabel = formatPauseDuration(pauseDuration);
+  const beforePauseBuffer = randomInt(90, Math.min(8 * 60, Math.max(90, Math.floor((availableSeconds - pauseDuration) / 2))));
+  const afterPauseBuffer = randomInt(90, Math.min(8 * 60, Math.max(90, Math.floor((availableSeconds - pauseDuration) / 2))));
+  const earliestPause = safeStart + beforePauseBuffer;
+  const latestPause = safeEnd - pauseDuration - afterPauseBuffer;
 
   if (latestPause <= earliestPause) return null;
 
@@ -722,7 +733,7 @@ const buildRandomAdjustment = (entry, index) => {
     endTime: secondsToTime(pauseStart),
     attendance: 'PRESENT',
     status: 'Present',
-    pauseReason: `${baseReason} (${pauseMinutes} min)`,
+    pauseReason: `${baseReason} (${pauseLabel})`,
   });
   const secondPart = recalculateSingleSession({
     ...entry,
@@ -732,12 +743,12 @@ const buildRandomAdjustment = (entry, index) => {
     attendance: 'PRESENT',
     status: 'Present',
     createdAt: nowIso(),
-    pauseReason: `Retour apres pause (${pauseMinutes} min)`,
+    pauseReason: `Retour apres pause (${pauseLabel})`,
   });
 
   return {
     id: `random-${entry.id}-${index}`,
-    reason: `${baseReason} de ${pauseMinutes} min`,
+    reason: `${baseReason} de ${pauseLabel}`,
     oldTime: formatChangeRange(entry),
     newTime: `${formatChangeRange(firstPart)} puis ${formatChangeRange(secondPart)}`,
     updates: [firstPart],
@@ -765,7 +776,7 @@ export const previewRandomPausesAbsences = (learnerId) => {
     throw new Error('Aucune session ecole modifiable pour cet apprenant.');
   }
 
-  const targetCount = Math.min(Math.max(3, Math.ceil(candidates.length * 0.18)), 10, candidates.length);
+  const targetCount = randomInt(1, Math.min(10, candidates.length));
   const shuffled = [...candidates].sort(() => Math.random() - 0.5);
   const changes = [];
 
