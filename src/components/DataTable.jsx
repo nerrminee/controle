@@ -5,10 +5,11 @@ import React from 'react';
  * @param {Object} props
  * @param {string[]} props.headers - Array of header names
  * @param {React.ReactNode} props.children - Table body rows (<tr> elements)
+ * @param {string} props.className - Optional class name for page-specific table styles
  */
-const DataTable = ({ headers, children }) => {
+const DataTable = ({ headers, children, className = '' }) => {
   return (
-    <div className="data-table-container">
+    <div className={`data-table-container ${className}`.trim()}>
       <table className="data-table">
         <thead>
           <tr>

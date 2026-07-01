@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import DataTable from '../components/DataTable';
 import useAdminConnectionStore from '../hooks/useAdminConnectionStore';
@@ -7,6 +7,7 @@ import { BiArrowBack, BiBookOpen, BiBriefcase, BiCalendar, BiTimeFive, BiUser } 
 const StudentDetails = () => {
   const { id } = useParams();
   const { learners, connectionTimes, planningDays } = useAdminConnectionStore();
+  const [expandedContentIds, setExpandedContentIds] = useState(new Set());
   const learner = learners.find((item) => item.id === id);
   const learnerConnections = connectionTimes.filter((entry) => entry.learnerId === id);
   const learnerPlanning = planningDays.filter((day) => day.learnerId === id);
@@ -29,10 +30,27 @@ const StudentDetails = () => {
     return total + (match ? (Number(match[1]) * 60) + Number(match[2] || 0) : 0);
   }, 0);
   const totalLabel = `${Math.floor(totalDuration / 60)}h ${String(totalDuration % 60).padStart(2, '0')}min`;
+  const formatFrenchDate = (value) => {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    return value || '-';
+  };
+  const formatType = (type) => (type === 'ECOLE' ? 'ÉCOLE' : type === 'FERIE' ? 'FÉRIÉ' : type || '-');
+  const toggleContent = (entryId) => {
+    setExpandedContentIds((current) => {
+      const next = new Set(current);
+      if (next.has(entryId)) {
+        next.delete(entryId);
+      } else {
+        next.add(entryId);
+      }
+      return next;
+    });
+  };
 
   return (
-    <div className="student-details-page">
-      <div className="flex-between mb-3">
+    <div className="student-details-page student-details-layout">
+      <div className="student-details-toolbar">
         <Link to="/students" className="btn btn-secondary" style={{ display: 'inline-flex', gap: '0.5rem' }}>
           <BiArrowBack />
           <span>Retour aux Apprenants</span>
@@ -40,7 +58,7 @@ const StudentDetails = () => {
         <span className="text-secondary" style={{ fontSize: '0.9rem' }}>Fiche issue de la base admin</span>
       </div>
 
-      <div className="grid-two-cols-equal mb-3">
+      <div className="grid-two-cols-equal student-details-summary">
         <div className="custom-card">
           <h3 className="section-title mb-3" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
             Informations generales
@@ -87,18 +105,13 @@ const StudentDetails = () => {
           </h3>
           <div className="admin-detail-list">
             <span><strong>Email :</strong> {learner.email || '-'}</span>
-            <span><strong>Telephone :</strong> {learner.phone || '-'}</span>
             <span><strong>Entreprise :</strong> <BiBriefcase size={16} /> {learner.company?.name || '-'}</span>
-            <span><strong>Tuteur :</strong> {learner.company?.tutorName || '-'}</span>
-            <span><strong>IP :</strong> {learner.connectionInfo?.ipAddress || '-'}</span>
-            <span><strong>Navigateur :</strong> {learner.connectionInfo?.browser || '-'}</span>
-            <span><strong>Appareil :</strong> {learner.connectionInfo?.device || '-'}</span>
           </div>
         </div>
       </div>
 
-      <div className="custom-card">
-        <h3 className="section-title mb-3 flex-between">
+      <div className="custom-card student-history-card">
+        <h3 className="section-title student-history-title">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
             <BiCalendar size={20} className="text-secondary" />
             Historique des connexions
@@ -106,21 +119,35 @@ const StudentDetails = () => {
           <span className="text-secondary" style={{ fontSize: '0.8rem' }}>{learnerPlanning.length} ligne(s) de planning</span>
         </h3>
 
-        <DataTable headers={['Date', 'Jour', 'Type', 'Heure debut', 'Heure fin', 'Duree', 'Statut', 'Commentaire']}>
-          {learnerConnections.length > 0 ? learnerConnections.map((entry) => (
-            <tr key={entry.id}>
-              <td>{entry.date}</td>
-              <td>{entry.day}</td>
-              <td>{entry.type}</td>
-              <td>{entry.startTime || entry.morningLogin || '-'}</td>
-              <td>{entry.endTime || entry.afternoonLogout || '-'}</td>
-              <td><strong>{entry.duration || `${Math.floor((entry.durationMinutes || 0) / 60)}h ${String((entry.durationMinutes || 0) % 60).padStart(2, '0')}min`}</strong></td>
-              <td><span className={`badge ${entry.status === 'Present' ? 'badge-success' : 'badge-warning'}`}>{entry.status}</span></td>
-              <td>{entry.content || entry.comment || '-'}</td>
-            </tr>
-          )) : (
+        <DataTable className="connection-history-table" headers={['Date', 'Jour', 'Type', 'Heure début', 'Heure fin', 'Durée', 'Adresse IP', 'Statut', 'Contenu']}>
+          {learnerConnections.length > 0 ? learnerConnections.map((entry) => {
+            const content = entry.content || entry.comment || '-';
+            const isExpanded = expandedContentIds.has(entry.id);
+            const canExpand = content.length > 130;
+
+            return (
+              <tr key={entry.id}>
+                <td className="col-date">{formatFrenchDate(entry.date)}</td>
+                <td className="col-day">{entry.day}</td>
+                <td className="col-type"><span className="type-pill">{formatType(entry.type)}</span></td>
+                <td className="col-time">{entry.startTime || entry.morningLogin || '-'}</td>
+                <td className="col-time">{entry.endTime || entry.afternoonLogout || '-'}</td>
+                <td className="col-duration"><strong>{entry.duration || `${Math.floor((entry.durationMinutes || 0) / 60)}h ${String((entry.durationMinutes || 0) % 60).padStart(2, '0')}min`}</strong></td>
+                <td className="col-ip">{entry.ipAddress || '-'}</td>
+                <td className="col-status"><span className={`badge compact-badge ${entry.status === 'Present' ? 'badge-success' : 'badge-warning'}`}>{entry.status}</span></td>
+                <td className="col-content">
+                  <div className={`history-content ${isExpanded ? 'expanded' : ''}`}>{content}</div>
+                  {canExpand && (
+                    <button className="history-content-toggle" type="button" onClick={() => toggleContent(entry.id)}>
+                      {isExpanded ? 'Voir moins' : 'Voir plus'}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          }) : (
             <tr>
-              <td colSpan="8" className="text-center text-secondary" style={{ padding: '2rem' }}>
+              <td colSpan="9" className="text-center text-secondary" style={{ padding: '2rem' }}>
                 Aucun temps de connexion genere pour cet apprenant.
               </td>
             </tr>

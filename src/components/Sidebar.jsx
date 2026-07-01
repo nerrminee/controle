@@ -6,8 +6,6 @@ import {
   BiGroup, 
   BiAward, 
   BiBuilding, 
-  BiCalendar,
-  BiExport,
   BiFile, 
   BiInfoCircle, 
   BiX 
@@ -56,35 +54,6 @@ const Sidebar = ({ isOpen, onClose }) => {
             <span>Apprenants</span>
           </NavLink>
 
-          <div className="sidebar-section-label">Admin</div>
-
-          <NavLink
-            to="/admin/add-learner"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={onClose}
-          >
-            <BiGroup size={20} className="sidebar-icon" />
-            <span>Ajouter apprenant</span>
-          </NavLink>
-
-          <NavLink
-            to="/admin/planning"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={onClose}
-          >
-            <BiCalendar size={20} className="sidebar-icon" />
-            <span>Planning</span>
-          </NavLink>
-
-          <NavLink
-            to="/admin/exports"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={onClose}
-          >
-            <BiExport size={20} className="sidebar-icon" />
-            <span>Exports</span>
-          </NavLink>
-          
           <NavLink 
             to="/trainers" 
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}

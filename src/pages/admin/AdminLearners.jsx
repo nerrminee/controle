@@ -24,22 +24,13 @@ const emptyLearner = {
   fullName: '',
   code: '',
   email: '',
-  phone: '',
   formation: '',
   level: '',
   contractStart: '',
   contractEnd: '',
   active: true,
-  connectionInfo: {
-    ipAddress: '',
-    browser: '',
-    device: '',
-  },
   company: {
     name: '',
-    tutorName: '',
-    tutorEmail: '',
-    tutorPhone: '',
   },
   planningRows: [{ ...emptyPlanningLine }],
 };
@@ -79,10 +70,6 @@ const AdminLearners = () => {
     setForm({
       ...emptyLearner,
       ...learner,
-      connectionInfo: {
-        ...emptyLearner.connectionInfo,
-        ...(learner.connectionInfo || {}),
-      },
       company: {
         ...emptyLearner.company,
         ...(learner.company || {}),
@@ -193,10 +180,6 @@ const AdminLearners = () => {
               <input type="email" className="search-input" value={form.email} onChange={(event) => updateForm('email', event.target.value)} />
             </label>
             <label className="form-field">
-              <span>Telephone</span>
-              <input className="search-input" value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} />
-            </label>
-            <label className="form-field">
               <span>Formation *</span>
               <input className="search-input" value={form.formation} onChange={(event) => updateForm('formation', event.target.value)} />
             </label>
@@ -223,41 +206,11 @@ const AdminLearners = () => {
         </section>
 
         <section className="admin-form-section">
-          <h3>Informations de connexion</h3>
-          <div className="admin-form-grid">
-            <label className="form-field">
-              <span>Adresse IP manuelle</span>
-              <input className="search-input" value={form.connectionInfo.ipAddress} onChange={(event) => updateNested('connectionInfo', 'ipAddress', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Navigateur manuel</span>
-              <input className="search-input" value={form.connectionInfo.browser} onChange={(event) => updateNested('connectionInfo', 'browser', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Appareil manuel</span>
-              <input className="search-input" value={form.connectionInfo.device} onChange={(event) => updateNested('connectionInfo', 'device', event.target.value)} />
-            </label>
-          </div>
-        </section>
-
-        <section className="admin-form-section">
           <h3>Informations entreprise</h3>
-          <div className="admin-form-grid">
+          <div className="admin-form-grid admin-company-form-grid">
             <label className="form-field">
               <span>Nom entreprise</span>
               <input className="search-input" value={form.company.name} onChange={(event) => updateNested('company', 'name', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Nom du tuteur</span>
-              <input className="search-input" value={form.company.tutorName} onChange={(event) => updateNested('company', 'tutorName', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Email du tuteur</span>
-              <input type="email" className="search-input" value={form.company.tutorEmail} onChange={(event) => updateNested('company', 'tutorEmail', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Telephone du tuteur</span>
-              <input className="search-input" value={form.company.tutorPhone} onChange={(event) => updateNested('company', 'tutorPhone', event.target.value)} />
             </label>
           </div>
         </section>
@@ -295,14 +248,22 @@ const AdminLearners = () => {
         <input className="search-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filtrer par nom, code ou formation..." />
       </div>
 
-      <DataTable headers={['Nom apprenant', 'Code', 'Formation', 'Diplome', 'Contact', 'Entreprise', 'Statut', 'Actions']}>
+      <DataTable headers={['Apprenant', 'Formation', 'Contrat', 'Entreprise', 'Statut', 'Actions']}>
         {filteredLearners.length > 0 ? filteredLearners.map((learner) => (
           <tr key={learner.id}>
-            <td><strong>{learner.fullName}</strong></td>
-            <td>{learner.code}</td>
-            <td>{learner.formation}</td>
-            <td>{learner.level || '-'}</td>
-            <td>{learner.email || '-'}<br />{learner.phone || '-'}</td>
+            <td>
+              <div className="admin-table-primary">{learner.fullName}</div>
+              <div className="admin-table-muted">Code: {learner.code}</div>
+              {learner.email && <div className="admin-table-muted">{learner.email}</div>}
+            </td>
+            <td>
+              <div>{learner.formation}</div>
+              <div className="admin-table-muted">{learner.level || 'Diplome non renseigne'}</div>
+            </td>
+            <td>
+              <div>{learner.contractStart || learner.contractStartDate || '-'}</div>
+              <div className="admin-table-muted">au {learner.contractEnd || learner.contractEndDate || '-'}</div>
+            </td>
             <td>{learner.company?.name || '-'}</td>
             <td><span className={`badge ${learner.active ? 'badge-success' : 'badge-warning'}`}>{learner.active ? 'Actif' : 'Inactif'}</span></td>
             <td>
@@ -315,7 +276,7 @@ const AdminLearners = () => {
           </tr>
         )) : (
           <tr>
-            <td colSpan="8" className="text-center text-secondary" style={{ padding: '2rem' }}>
+            <td colSpan="6" className="text-center text-secondary" style={{ padding: '2rem' }}>
               Aucun apprenant. Ajoutez le premier apprenant depuis le formulaire admin.
             </td>
           </tr>

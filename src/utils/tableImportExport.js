@@ -1,12 +1,44 @@
+const parseDelimitedLine = (line, delimiter) => {
+  const values = [];
+  let value = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const nextChar = line[index + 1];
+
+    if (char === '"' && inQuotes && nextChar === '"') {
+      value += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === delimiter && !inQuotes) {
+      values.push(value.trim());
+      value = '';
+    } else {
+      value += char;
+    }
+  }
+
+  values.push(value.trim());
+  return values;
+};
+
+const findHeaderIndex = (lines, delimiter) => lines.findIndex((line) => {
+  const headers = parseDelimitedLine(line, delimiter).map((header) => normalizeHeader(header));
+  return headers.includes('date') && headers.includes('jour') && headers.includes('type');
+});
+
 export const parseDelimitedText = (text) => {
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) return [];
 
   const delimiter = lines[0].includes(';') ? ';' : lines[0].includes('\t') ? '\t' : ',';
-  const headers = lines[0].split(delimiter).map((header) => normalizeHeader(header));
+  const headerIndex = findHeaderIndex(lines, delimiter);
+  const headers = parseDelimitedLine(lines[headerIndex >= 0 ? headerIndex : 0], delimiter).map((header) => normalizeHeader(header));
 
-  return lines.slice(1).map((line) => {
-    const values = line.split(delimiter).map((value) => value.trim());
+  return lines.slice((headerIndex >= 0 ? headerIndex : 0) + 1).map((line) => {
+    const values = parseDelimitedLine(line, delimiter);
     return headers.reduce((row, header, index) => {
       row[header] = values[index] || '';
       return row;
@@ -39,7 +71,10 @@ export const readImportFile = (file) => new Promise((resolve, reject) => {
   }
 
   const reader = new FileReader();
-  reader.onload = () => resolve({ type: extension, name: file.name, rows: parseDelimitedText(String(reader.result || '')) });
+  reader.onload = () => {
+    const text = String(reader.result || '');
+    resolve({ type: extension, name: file.name, rows: parseDelimitedText(text), text });
+  };
   reader.onerror = () => reject(new Error('Impossible de lire le fichier importe.'));
   reader.readAsText(file);
 });

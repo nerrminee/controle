@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BiEdit, BiPlus, BiTrash } from 'react-icons/bi';
+import { BiEdit, BiImport, BiPlus, BiTrash } from 'react-icons/bi';
 import DataTable from '../../components/DataTable';
 import useAdminConnectionStore from '../../hooks/useAdminConnectionStore';
 import {
@@ -8,9 +8,11 @@ import {
   deleteConnectionTime,
   deleteLearner,
   formatDurationMinutes,
+  importLearnerPlanningWithConnections,
   updateConnectionTime,
   updateLearner,
 } from '../../services/adminConnectionStore';
+import { readImportFile } from '../../utils/tableImportExport';
 
 const emptyLearner = {
   name: '',
@@ -23,12 +25,15 @@ const emptyLearner = {
 const emptyConnectionTime = {
   learnerId: '',
   week: '',
+  tp: '',
   date: '',
   day: '',
   type: 'ECOLE',
+  attendance: 'PRESENT',
   content: '',
   startTime: '',
   endTime: '',
+  ipAddress: '',
 };
 
 const toMinutes = (time) => {
@@ -42,6 +47,8 @@ const getPreviewDuration = (entry) => {
   const duration = toMinutes(entry.endTime) - toMinutes(entry.startTime);
   return duration >= 0 ? formatDurationMinutes(duration) : 'Erreur';
 };
+
+const getDurationLabel = (entry) => entry.durationFormatted || (/^\d{2}:\d{2}:\d{2}$/.test(entry.duration || '') ? entry.duration : formatDurationMinutes(entry.durationMinutes || 0));
 
 const AdminConnectionTimes = () => {
   const { learners, connectionTimes } = useAdminConnectionStore();
@@ -58,6 +65,9 @@ const AdminConnectionTimes = () => {
       ? connectionTimes.filter((entry) => entry.learnerId === selectedLearnerId)
       : []
   ), [connectionTimes, selectedLearnerId]);
+  const allConnectionRows = useMemo(() => [...connectionTimes].sort((first, second) => (
+    `${first.learnerName || ''}-${first.date || ''}-${first.startTime || ''}`.localeCompare(`${second.learnerName || ''}-${second.date || ''}-${second.startTime || ''}`)
+  )), [connectionTimes]);
 
   const resetLearnerForm = () => setLearnerForm(emptyLearner);
   const resetConnectionForm = (learnerId = selectedLearnerId) => {
@@ -151,18 +161,48 @@ const AdminConnectionTimes = () => {
     }
   };
 
+  const handleImportPlanningFile = async (event) => {
+    setError('');
+    setMessage('');
+    setLoading(true);
+
+    try {
+      const result = await readImportFile(event.target.files[0]);
+      if (result.type === 'pdf') {
+        throw new Error('Importez le planning au format CSV pour generer les temps de connexion.');
+      }
+
+      const imported = importLearnerPlanningWithConnections({
+        rows: result.rows,
+        text: result.text,
+        sourceFile: result.name,
+      });
+      setSelectedLearnerId(imported.learner.id);
+      resetConnectionForm(imported.learner.id);
+      setMessage(`${imported.learner.fullName} importe: ${imported.planningCount} ligne(s) planning, ${imported.connectionCount} session(s), ${imported.statusCount} statut(s).`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      event.target.value = '';
+    }
+  };
+
   const handleEditConnectionTime = (entry) => {
     setSelectedLearnerId(entry.learnerId);
     setConnectionForm({
       id: entry.id,
       learnerId: entry.learnerId,
       week: entry.week || '',
+      tp: entry.tp || '',
       date: entry.date || '',
       day: entry.day || '',
       type: entry.type || 'ECOLE',
+      attendance: entry.attendance || (entry.status === 'Absent' ? 'ABSENT' : 'PRESENT'),
       content: entry.content || entry.comment || '',
       startTime: entry.startTime || '',
       endTime: entry.endTime || '',
+      ipAddress: entry.ipAddress || '',
       createdAt: entry.createdAt,
     });
   };
@@ -187,35 +227,45 @@ const AdminConnectionTimes = () => {
       <div className="admin-page-header">
         <div>
           <h2>Temps de connexion apprenants</h2>
-          <p className="text-secondary">Page admin separee, accessible uniquement par route directe.</p>
+          <p className="text-secondary">Import planning CSV et suivi des sessions apprenants.</p>
         </div>
+        <label className="btn btn-secondary admin-file-button">
+          <BiImport size={18} />
+          Import planning CSV
+          <input type="file" accept=".csv,.tsv,.txt,.xls" onChange={handleImportPlanningFile} />
+        </label>
       </div>
 
       {loading && <div className="admin-alert admin-alert-info">Traitement en cours...</div>}
       {message && <div className="admin-alert admin-alert-success">{message}</div>}
       {error && <div className="admin-alert admin-alert-danger">{error}</div>}
 
-      <form className="custom-card admin-form-grid" onSubmit={handleSaveLearner}>
-        <label className="form-field">
-          <span>Nom de l apprenant</span>
-          <input className="search-input" value={learnerForm.name} onChange={(event) => updateLearnerForm('name', event.target.value)} />
-        </label>
-        <label className="form-field">
-          <span>Code apprenant</span>
-          <input className="search-input" value={learnerForm.code} onChange={(event) => updateLearnerForm('code', event.target.value)} />
-        </label>
-        <label className="form-field">
-          <span>Formation</span>
-          <input className="search-input" value={learnerForm.formation} onChange={(event) => updateLearnerForm('formation', event.target.value)} />
-        </label>
-        <label className="form-field">
-          <span>Date debut du contrat</span>
-          <input type="date" className="search-input" value={learnerForm.contractStartDate} onChange={(event) => updateLearnerForm('contractStartDate', event.target.value)} />
-        </label>
-        <label className="form-field">
-          <span>Date fin du contrat</span>
-          <input type="date" className="search-input" value={learnerForm.contractEndDate} onChange={(event) => updateLearnerForm('contractEndDate', event.target.value)} />
-        </label>
+      <form className="custom-card admin-stacked-form" onSubmit={handleSaveLearner}>
+        <section className="admin-form-section">
+          <h3>Ajouter apprenant</h3>
+          <div className="admin-form-grid admin-learner-form-grid">
+            <label className="form-field">
+              <span>Nom</span>
+              <input className="search-input" value={learnerForm.name} onChange={(event) => updateLearnerForm('name', event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Code</span>
+              <input className="search-input" value={learnerForm.code} onChange={(event) => updateLearnerForm('code', event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Formation</span>
+              <input className="search-input" value={learnerForm.formation} onChange={(event) => updateLearnerForm('formation', event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Date debut contrat</span>
+              <input type="date" className="search-input" value={learnerForm.contractStartDate} onChange={(event) => updateLearnerForm('contractStartDate', event.target.value)} />
+            </label>
+            <label className="form-field">
+              <span>Date fin contrat</span>
+              <input type="date" className="search-input" value={learnerForm.contractEndDate} onChange={(event) => updateLearnerForm('contractEndDate', event.target.value)} />
+            </label>
+          </div>
+        </section>
         <div className="admin-form-actions">
           <button className="btn btn-primary" type="submit" disabled={loading}>
             <BiPlus size={18} />
@@ -259,47 +309,64 @@ const AdminConnectionTimes = () => {
 
       {selectedLearner && (
         <>
-          <form className="custom-card admin-form-grid" onSubmit={handleSaveConnectionTime}>
-            <div className="admin-span-2">
+          <form className="custom-card admin-stacked-form" onSubmit={handleSaveConnectionTime}>
+            <section className="admin-form-section">
               <h3>Ajouter temps de connexion</h3>
               <p className="text-secondary">{selectedLearner.name || selectedLearner.fullName} - {selectedLearner.code}</p>
-            </div>
-            <label className="form-field">
-              <span>Semaine</span>
-              <input className="search-input" value={connectionForm.week} onChange={(event) => updateConnectionForm('week', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Date</span>
-              <input type="date" className="search-input" value={connectionForm.date} onChange={(event) => updateConnectionForm('date', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Jour</span>
-              <input className="search-input" value={connectionForm.day} onChange={(event) => updateConnectionForm('day', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Type</span>
-              <select className="search-input" value={connectionForm.type} onChange={(event) => updateConnectionForm('type', event.target.value)}>
-                <option value="ECOLE">ECOLE</option>
-                <option value="ENTREPRISE">ENTREPRISE</option>
-                <option value="FERIE">FERIE</option>
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Contenu</span>
-              <input className="search-input" value={connectionForm.content} onChange={(event) => updateConnectionForm('content', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Heure debut</span>
-              <input type="time" className="search-input" value={connectionForm.startTime} onChange={(event) => updateConnectionForm('startTime', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Heure fin</span>
-              <input type="time" className="search-input" value={connectionForm.endTime} onChange={(event) => updateConnectionForm('endTime', event.target.value)} />
-            </label>
-            <div className="form-field">
-              <span>Duree session</span>
-              <strong className="admin-duration-preview">{getPreviewDuration(connectionForm) || '0h00'}</strong>
-            </div>
+              <div className="admin-form-grid admin-session-form-grid">
+                <label className="form-field">
+                  <span>Semaine</span>
+                  <input className="search-input" value={connectionForm.week} onChange={(event) => updateConnectionForm('week', event.target.value)} />
+                </label>
+                <label className="form-field">
+                  <span>TP</span>
+                  <input className="search-input" value={connectionForm.tp} onChange={(event) => updateConnectionForm('tp', event.target.value)} />
+                </label>
+                <label className="form-field">
+                  <span>Date</span>
+                  <input type="date" className="search-input" value={connectionForm.date} onChange={(event) => updateConnectionForm('date', event.target.value)} />
+                </label>
+                <label className="form-field">
+                  <span>Jour</span>
+                  <input className="search-input" value={connectionForm.day} onChange={(event) => updateConnectionForm('day', event.target.value)} />
+                </label>
+                <label className="form-field">
+                  <span>Type</span>
+                  <select className="search-input" value={connectionForm.type} onChange={(event) => updateConnectionForm('type', event.target.value)}>
+                    <option value="ECOLE">ECOLE</option>
+                    <option value="ENTREPRISE">ENTREPRISE</option>
+                    <option value="FERIE">FERIE</option>
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>Presence</span>
+                  <select className="search-input" value={connectionForm.attendance} onChange={(event) => updateConnectionForm('attendance', event.target.value)}>
+                    <option value="PRESENT">Present</option>
+                    <option value="ABSENT">Absent</option>
+                  </select>
+                </label>
+                <label className="form-field admin-span-2">
+                  <span>Contenu</span>
+                  <input className="search-input" value={connectionForm.content} onChange={(event) => updateConnectionForm('content', event.target.value)} />
+                </label>
+                <label className="form-field">
+                  <span>Heure debut</span>
+                  <input type="time" step="1" className="search-input" value={connectionForm.startTime} onChange={(event) => updateConnectionForm('startTime', event.target.value)} />
+                </label>
+                <label className="form-field">
+                  <span>Heure fin</span>
+                  <input type="time" step="1" className="search-input" value={connectionForm.endTime} onChange={(event) => updateConnectionForm('endTime', event.target.value)} />
+                </label>
+                <label className="form-field">
+                  <span>Adresse IP</span>
+                  <input className="search-input" value={connectionForm.ipAddress} onChange={(event) => updateConnectionForm('ipAddress', event.target.value)} />
+                </label>
+                <div className="form-field">
+                  <span>Duree session</span>
+                  <strong className="admin-duration-preview">{connectionForm.attendance === 'ABSENT' ? '0h00' : getPreviewDuration(connectionForm) || '0h00'}</strong>
+                </div>
+              </div>
+            </section>
             <div className="admin-form-actions">
               <button className="btn btn-primary" type="submit" disabled={loading}>
                 {connectionForm.id ? 'Mettre a jour' : 'Enregistrer la session'}
@@ -310,17 +377,20 @@ const AdminConnectionTimes = () => {
 
           <div className="custom-card">
             <h3 className="mb-3">Temps de connexion de {selectedLearner.name || selectedLearner.fullName}</h3>
-            <DataTable headers={['Semaine', 'Date', 'Jour', 'Type', 'Contenu', 'Heure debut', 'Heure fin', 'Duree session', 'Actions']}>
+            <DataTable headers={['Semaine', 'TP', 'Date', 'Jour', 'Type', 'Presence', 'Contenu', 'Heure debut', 'Heure fin', 'Duree session', 'Adresse IP', 'Actions']}>
               {selectedConnectionTimes.length > 0 ? selectedConnectionTimes.map((entry) => (
                 <tr key={entry.id}>
                   <td>{entry.week}</td>
+                  <td>{entry.tp || '-'}</td>
                   <td>{entry.date}</td>
                   <td>{entry.day}</td>
                   <td>{entry.type}</td>
+                  <td>{entry.attendance === 'ABSENT' || entry.status === 'Absent' ? 'Absent' : 'Present'}</td>
                   <td>{entry.content || entry.comment}</td>
                   <td>{entry.startTime || '-'}</td>
                   <td>{entry.endTime || '-'}</td>
-                  <td>{formatDurationMinutes(entry.durationMinutes || 0)}</td>
+                  <td>{getDurationLabel(entry)}</td>
+                  <td>{entry.ipAddress || '-'}</td>
                   <td>
                     <div className="admin-row-actions">
                       <button className="icon-button" type="button" title="Modifier" onClick={() => handleEditConnectionTime(entry)}>
@@ -334,7 +404,7 @@ const AdminConnectionTimes = () => {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="9" className="text-center text-secondary" style={{ padding: '2rem' }}>
+                  <td colSpan="12" className="text-center text-secondary" style={{ padding: '2rem' }}>
                     Aucun temps de connexion pour cet apprenant.
                   </td>
                 </tr>
@@ -343,6 +413,35 @@ const AdminConnectionTimes = () => {
           </div>
         </>
       )}
+
+      <div className="custom-card">
+        <h3 className="mb-3">Toutes les lignes de connexion</h3>
+        <DataTable headers={['Learner Name', 'Learner Code', 'Formation', 'Week', 'Date', 'Day', 'Type', 'Content', 'Start Time', 'End Time', 'Session Duration', 'IP Address', 'Status']}>
+          {allConnectionRows.length > 0 ? allConnectionRows.map((entry) => (
+            <tr key={entry.id}>
+              <td><strong>{entry.learnerName || learners.find((learner) => learner.id === entry.learnerId)?.fullName || '-'}</strong></td>
+              <td>{entry.learnerCode || '-'}</td>
+              <td>{entry.formation || '-'}</td>
+              <td>{entry.week || '-'}</td>
+              <td>{entry.date || '-'}</td>
+              <td>{entry.day || '-'}</td>
+              <td>{entry.type || '-'}</td>
+              <td>{entry.content || entry.comment || '-'}</td>
+              <td>{entry.startTime || '-'}</td>
+              <td>{entry.endTime || '-'}</td>
+              <td>{getDurationLabel(entry)}</td>
+              <td>{entry.ipAddress || '-'}</td>
+              <td>{entry.status || '-'}</td>
+            </tr>
+          )) : (
+            <tr>
+              <td colSpan="13" className="text-center text-secondary" style={{ padding: '2rem' }}>
+                Aucun temps de connexion importe ou enregistre.
+              </td>
+            </tr>
+          )}
+        </DataTable>
+      </div>
     </div>
   );
 };

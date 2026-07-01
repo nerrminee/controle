@@ -3,8 +3,7 @@ import Card from '../components/Card';
 import DataTable from '../components/DataTable';
 import useAdminConnectionStore from '../hooks/useAdminConnectionStore';
 import { trainers } from '../data/trainers';
-import { companies } from '../data/companies';
-import { BiAward, BiBuilding, BiGroup, BiLogInCircle, BiTimeFive } from 'react-icons/bi';
+import { BiAward, BiGroup, BiLogInCircle, BiTimeFive } from 'react-icons/bi';
 
 const minutesFromDuration = (duration) => {
   const match = String(duration || '').match(/(\d+)h\s*(\d+)?/);
@@ -40,12 +39,6 @@ const Dashboard = () => {
           value={trainers.length}
           icon={<BiAward size={24} />}
           description="Enseignants actifs"
-        />
-        <Card
-          title="Entreprises"
-          value={companies.length}
-          icon={<BiBuilding size={24} />}
-          description="Partenaires d accueil"
         />
         <Card
           title="Temps de Connexion"
