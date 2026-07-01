@@ -36,7 +36,7 @@ const emptyLearner = {
 };
 
 const AdminLearners = () => {
-  const { learners, planningDays } = useAdminConnectionStore();
+  const { learners, planningDays, isLoading } = useAdminConnectionStore();
   const [form, setForm] = useState(emptyLearner);
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
@@ -277,7 +277,7 @@ const AdminLearners = () => {
         )) : (
           <tr>
             <td colSpan="6" className="text-center text-secondary" style={{ padding: '2rem' }}>
-              Aucun apprenant. Ajoutez le premier apprenant depuis le formulaire admin.
+              {isLoading ? 'Chargement des apprenants...' : 'Aucun apprenant. Ajoutez le premier apprenant depuis le formulaire admin.'}
             </td>
           </tr>
         )}

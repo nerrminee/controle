@@ -25,7 +25,7 @@ const formatMinutes = (minutes) => {
 };
 
 const Dashboard = () => {
-  const { learners, connectionTimes } = useAdminConnectionStore();
+  const { learners, connectionTimes, isLoading } = useAdminConnectionStore();
   const totalConnectionMinutes = useMemo(() => (
     connectionTimes.reduce((total, entry) => total + entryMinutes(entry), 0)
   ), [connectionTimes]);
@@ -44,7 +44,7 @@ const Dashboard = () => {
       <div className="grid-stats">
         <Card
           title="Apprenants"
-          value={learners.length}
+          value={isLoading && learners.length === 0 ? 'Chargement...' : learners.length}
           icon={<BiGroup size={24} />}
           description="Ajoutes par l admin"
         />
@@ -113,7 +113,7 @@ const Dashboard = () => {
           <div className="stat-widget mb-3">
             <div className="flex-between mb-3">
               <span className="text-secondary">Apprenants actifs</span>
-              <strong>{learners.filter((learner) => learner.active).length}</strong>
+              <strong>{isLoading && learners.length === 0 ? 'Chargement...' : learners.filter((learner) => learner.active).length}</strong>
             </div>
           </div>
           <div className="stat-widget mb-3">

@@ -77,7 +77,7 @@ const buildConnectionDraft = (entry) => ({
 });
 
 const AdminConnectionTimes = () => {
-  const { learners, connectionTimes } = useAdminConnectionStore();
+  const { learners, connectionTimes, isLoading } = useAdminConnectionStore();
   const [learnerForm, setLearnerForm] = useState(emptyLearner);
   const [connectionForm, setConnectionForm] = useState(emptyConnectionTime);
   const [selectedLearnerId, setSelectedLearnerId] = useState('');
@@ -449,7 +449,7 @@ const AdminConnectionTimes = () => {
           )) : (
             <tr>
               <td colSpan="5" className="text-center text-secondary" style={{ padding: '2rem' }}>
-                Aucun apprenant ajouté par l'admin.
+                {isLoading ? 'Chargement des apprenants...' : "Aucun apprenant ajoute par l'admin."}
               </td>
             </tr>
           )}

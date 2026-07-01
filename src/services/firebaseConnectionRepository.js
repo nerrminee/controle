@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, getDocsFromServer, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export const firebaseCollections = {
@@ -17,6 +17,35 @@ export const mirrorStateToFirestore = async (state) => {
   await Promise.all(writes);
 };
 
+export const loadFirestoreStateOnce = async () => {
+  const entries = await Promise.all(
+    Object.entries(firebaseCollections).map(async ([key, collectionName]) => {
+      const snapshot = await getDocsFromServer(collection(db, collectionName));
+      return [key, snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))];
+    }),
+  );
+
+  return Object.fromEntries(entries);
+};
+
+export const loadBackupState = async () => {
+  if (typeof fetch !== 'function') {
+    throw new Error('Backup indisponible hors navigateur.');
+  }
+
+  const response = await fetch('/admin-data-backup.json', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error('Backup apprenants indisponible.');
+  }
+
+  const state = await response.json();
+  return {
+    learners: state.learners || [],
+    planningDays: state.planningDays || [],
+    connectionTimes: state.connectionTimes || [],
+  };
+};
+
 export const subscribeToFirestoreState = (onData, onError) => {
   const state = {
     learners: [],
@@ -28,10 +57,21 @@ export const subscribeToFirestoreState = (onData, onError) => {
     planningDays: false,
     connectionTimes: false,
   };
+  const cacheState = {
+    learners: false,
+    planningDays: false,
+    connectionTimes: false,
+  };
 
   const notifyWhenReady = () => {
     if (loaded.learners && loaded.planningDays && loaded.connectionTimes) {
-      onData({ ...state });
+      onData(
+        { ...state },
+        {
+          fromCache: Object.values(cacheState).some(Boolean),
+          isEmpty: Object.values(state).every((items) => items.length === 0),
+        },
+      );
     }
   };
 
@@ -41,6 +81,7 @@ export const subscribeToFirestoreState = (onData, onError) => {
       (snapshot) => {
         state[key] = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
         loaded[key] = true;
+        cacheState[key] = snapshot.metadata.fromCache;
         notifyWhenReady();
       },
       onError,

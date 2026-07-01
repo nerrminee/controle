@@ -1,20 +1,75 @@
 import { useEffect, useState } from 'react';
 import { cacheAdminState, getAdminState } from '../services/adminConnectionStore';
-import { subscribeToFirestoreState } from '../services/firebaseConnectionRepository';
+import { loadBackupState, loadFirestoreStateOnce, subscribeToFirestoreState } from '../services/firebaseConnectionRepository';
+
+const hasStateData = (adminState) => (
+  adminState.learners.length > 0 ||
+  adminState.planningDays.length > 0 ||
+  adminState.connectionTimes.length > 0
+);
+
+const loadRemoteOrBackupState = async () => {
+  const remoteState = await loadFirestoreStateOnce();
+  if (hasStateData(remoteState)) return remoteState;
+  return loadBackupState();
+};
 
 const useAdminConnectionStore = () => {
-  const [state, setState] = useState(getAdminState);
+  const [state, setState] = useState(() => {
+    const adminState = getAdminState();
+    return { ...adminState, isLoading: !hasStateData(adminState) };
+  });
 
   useEffect(() => {
-    const refresh = () => setState(getAdminState());
+    let mounted = true;
+    const refresh = () => {
+      const adminState = getAdminState();
+      setState((current) => ({ ...adminState, isLoading: current.isLoading && !hasStateData(adminState) }));
+    };
     window.addEventListener('connection-admin-store-updated', refresh);
     window.addEventListener('storage', refresh);
-    const unsubscribe = subscribeToFirestoreState((remoteState) => {
+
+    loadRemoteOrBackupState()
+      .then((remoteState) => {
+        if (!mounted) return;
+
+        if (hasStateData(remoteState)) {
+          cacheAdminState(remoteState);
+          setState({ ...getAdminState(), isLoading: false });
+        }
+      })
+      .catch(async () => {
+        if (!mounted) return;
+        try {
+          const backupState = await loadBackupState();
+          if (!mounted) return;
+          if (hasStateData(backupState)) {
+            cacheAdminState(backupState);
+            setState({ ...getAdminState(), isLoading: false });
+            return;
+          }
+        } catch {
+          // Keep the current local state when both Firestore and backup are unavailable.
+        }
+        if (mounted) setState((current) => ({ ...current, isLoading: false }));
+      });
+
+    const unsubscribe = subscribeToFirestoreState((remoteState, metadata = {}) => {
+      const currentState = getAdminState();
+
+      if (metadata.fromCache && metadata.isEmpty) {
+        setState((current) => ({ ...currentState, isLoading: current.isLoading }));
+        return;
+      }
+
       cacheAdminState(remoteState);
-      setState(getAdminState());
-    }, () => {});
+      setState({ ...getAdminState(), isLoading: false });
+    }, () => {
+      setState((current) => ({ ...current, isLoading: false }));
+    });
 
     return () => {
+      mounted = false;
       window.removeEventListener('connection-admin-store-updated', refresh);
       window.removeEventListener('storage', refresh);
       unsubscribe();

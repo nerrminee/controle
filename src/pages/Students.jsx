@@ -5,7 +5,7 @@ import useAdminConnectionStore from '../hooks/useAdminConnectionStore';
 import { BiInfoCircle, BiSearch } from 'react-icons/bi';
 
 const Students = () => {
-  const { learners, connectionTimes } = useAdminConnectionStore();
+  const { learners, connectionTimes, isLoading } = useAdminConnectionStore();
   const [searchTerm, setSearchTerm] = useState('');
 
   const totalsByLearner = useMemo(() => connectionTimes.reduce((totals, entry) => {
@@ -24,7 +24,7 @@ const Students = () => {
       <div className="flex-between mb-3 flex-wrap" style={{ gap: '1rem' }}>
         <h2 className="section-title">Liste des Apprenants</h2>
         <span className="text-secondary" style={{ fontSize: '0.9rem' }}>
-          {filteredLearners.length} apprenant(s) trouve(s)
+          {isLoading && learners.length === 0 ? 'Chargement des apprenants...' : `${filteredLearners.length} apprenant(s) trouve(s)`}
         </span>
       </div>
 
@@ -71,7 +71,7 @@ const Students = () => {
         ) : (
           <tr>
             <td colSpan="7" className="text-center text-secondary" style={{ padding: '2rem' }}>
-              Aucun apprenant n a encore ete ajoute par l admin.
+              {isLoading ? 'Chargement des apprenants...' : 'Aucun apprenant n a encore ete ajoute par l admin.'}
             </td>
           </tr>
         )}
