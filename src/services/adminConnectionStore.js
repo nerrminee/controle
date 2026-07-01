@@ -211,6 +211,8 @@ const initialState = {
   connectionTimes: [],
 };
 
+let memoryState = initialState;
+
 const seedIds = new Set(['learner-alexandre-maxime']);
 
 const sanitizeConnectionEntry = (entry) => {
@@ -242,9 +244,24 @@ const sanitizeState = (state) => ({
 const readState = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? sanitizeState(JSON.parse(stored)) : initialState;
+    if (!stored) return memoryState;
+
+    memoryState = sanitizeState(JSON.parse(stored));
+    return memoryState;
   } catch {
-    return initialState;
+    return memoryState;
+  }
+};
+
+const persistState = (state) => {
+  memoryState = state;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
+  } catch (error) {
+    console.warn('Local admin cache unavailable:', error.message);
+    return false;
   }
 };
 
@@ -255,7 +272,7 @@ const writeState = (state) => {
     connectionTimes: sortConnectionTimes(state.connectionTimes),
   };
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sortedState));
+  persistState(sortedState);
   window.dispatchEvent(new Event('connection-admin-store-updated'));
   mirrorStateToFirestore(sortedState).catch((error) => {
     console.warn('Firestore sync failed:', error.message);
@@ -274,11 +291,11 @@ export const getAdminState = () => readState();
 
 export const cacheAdminState = (state) => {
   const cleanState = sanitizeState(state);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+  persistState({
     ...cleanState,
     planningDays: sortPlanningDays(cleanState.planningDays),
     connectionTimes: sortConnectionTimes(cleanState.connectionTimes),
-  }));
+  });
   window.dispatchEvent(new Event('connection-admin-store-updated'));
 };
 
@@ -914,16 +931,30 @@ export const deleteConnectionTime = (connectionTimeId) => {
   });
 };
 
-export const isAdminAuthenticated = () => localStorage.getItem(ADMIN_KEY) === 'true';
+export const isAdminAuthenticated = () => {
+  try {
+    return localStorage.getItem(ADMIN_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
 
 export const loginAdmin = (password) => {
   if (password !== 'admin123') {
     throw new Error('Mot de passe admin incorrect.');
   }
 
-  localStorage.setItem(ADMIN_KEY, 'true');
+  try {
+    localStorage.setItem(ADMIN_KEY, 'true');
+  } catch (error) {
+    console.warn('Local admin auth cache unavailable:', error.message);
+  }
 };
 
 export const logoutAdmin = () => {
-  localStorage.removeItem(ADMIN_KEY);
+  try {
+    localStorage.removeItem(ADMIN_KEY);
+  } catch (error) {
+    console.warn('Local admin auth cache unavailable:', error.message);
+  }
 };

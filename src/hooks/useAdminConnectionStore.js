@@ -9,20 +9,26 @@ const bundledBackup = {
   connectionTimes: bundledBackupState.connectionTimes || [],
 };
 
+const normalizeAdminState = (adminState = {}) => ({
+  learners: Array.isArray(adminState.learners) ? adminState.learners : [],
+  planningDays: Array.isArray(adminState.planningDays) ? adminState.planningDays : [],
+  connectionTimes: Array.isArray(adminState.connectionTimes) ? adminState.connectionTimes : [],
+});
+
 const hasStateData = (adminState) => (
-  adminState.learners.length > 0 ||
-  adminState.planningDays.length > 0 ||
-  adminState.connectionTimes.length > 0
+  normalizeAdminState(adminState).learners.length > 0 ||
+  normalizeAdminState(adminState).planningDays.length > 0 ||
+  normalizeAdminState(adminState).connectionTimes.length > 0
 );
 
 const loadRemoteOrBackupState = async () => {
-  const remoteState = await loadFirestoreStateOnce();
+  const remoteState = normalizeAdminState(await loadFirestoreStateOnce());
   if (hasStateData(remoteState)) return remoteState;
-  return loadBackupState();
+  return normalizeAdminState(await loadBackupState());
 };
 
 const getInitialState = () => {
-  const adminState = getAdminState();
+  const adminState = normalizeAdminState(getAdminState());
   return hasStateData(adminState) ? adminState : bundledBackup;
 };
 
@@ -40,7 +46,7 @@ const useAdminConnectionStore = () => {
     }
 
     const refresh = () => {
-      const adminState = getAdminState();
+      const adminState = normalizeAdminState(getAdminState());
       setState((current) => ({ ...adminState, isLoading: current.isLoading && !hasStateData(adminState) }));
     };
     window.addEventListener('connection-admin-store-updated', refresh);
@@ -61,7 +67,7 @@ const useAdminConnectionStore = () => {
           const backupState = await loadBackupState();
           if (!mounted) return;
           if (hasStateData(backupState)) {
-            cacheAdminState(backupState);
+            cacheAdminState(normalizeAdminState(backupState));
             setState({ ...getAdminState(), isLoading: false });
             return;
           }
@@ -72,14 +78,14 @@ const useAdminConnectionStore = () => {
       });
 
     const unsubscribe = subscribeToFirestoreState((remoteState, metadata = {}) => {
-      const currentState = getAdminState();
+      const currentState = normalizeAdminState(getAdminState());
 
       if (metadata.isEmpty) {
         setState((current) => ({ ...currentState, isLoading: current.isLoading }));
         return;
       }
 
-      cacheAdminState(remoteState);
+      cacheAdminState(normalizeAdminState(remoteState));
       setState({ ...getAdminState(), isLoading: false });
     }, () => {
       setState((current) => ({ ...current, isLoading: false }));
