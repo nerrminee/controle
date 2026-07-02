@@ -19,6 +19,35 @@ const slugify = (value) => String(value || '')
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '');
 
+const hashValue = (value) => String(value || '')
+  .split('')
+  .reduce((hash, character) => ((hash * 31) + character.charCodeAt(0)) % 1000000, 7);
+
+const isGeneratedIdentifier = (value) => /^ID-\d{6}$/i.test(String(value || '').trim());
+
+const getOriginalLearnerCode = (learner = {}) => {
+  const existingOriginal = learner.originalCode || learner.sourceCode;
+  if (existingOriginal) return String(existingOriginal).trim();
+
+  const code = String(learner.code || '').trim();
+  return isGeneratedIdentifier(code) ? '' : code;
+};
+
+const getLearnerIdentifier = (learner = {}) => {
+  if (isGeneratedIdentifier(learner.identifier)) return String(learner.identifier).trim().toUpperCase();
+  if (isGeneratedIdentifier(learner.code)) return String(learner.code).trim().toUpperCase();
+
+  const key = getOriginalLearnerCode(learner) || learner.fullName || learner.name || learner.id || crypto.randomUUID();
+  return `ID-${String(100000 + (hashValue(key) % 900000)).padStart(6, '0')}`;
+};
+
+const getLearnerDocumentId = (learner = {}) => `learner-${slugify(getLearnerIdentifier(learner))}`;
+
+const getLearnerIpAddress = (learner = {}) => {
+  const key = learner.learnerId || learner.id || learner.identifier || learner.learnerCode || learner.code || learner.learnerName || learner.fullName || learner.name;
+  return `192.168.1.${20 + (hashValue(key) % 200)}`;
+};
+
 const randomInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
 const randomTime = (startMinutes, endMinutes) => {
@@ -124,22 +153,6 @@ const durationSecondsBetween = (startTime, endTime) => {
   return end - start;
 };
 
-const randomIpv4 = (usedIps) => {
-  const privateRanges = [
-    () => `192.168.${randomInt(0, 255)}.${randomInt(1, 254)}`,
-    () => `10.${randomInt(0, 255)}.${randomInt(0, 255)}.${randomInt(1, 254)}`,
-    () => `172.${randomInt(16, 31)}.${randomInt(0, 255)}.${randomInt(1, 254)}`,
-  ];
-  let ipAddress = '';
-
-  do {
-    ipAddress = privateRanges[randomInt(0, privateRanges.length - 1)]();
-  } while (usedIps.has(ipAddress));
-
-  usedIps.add(ipAddress);
-  return ipAddress;
-};
-
 export const durationMinutesBetween = (startTime, endTime) => {
   if (!startTime || !endTime) return 0;
   const start = toMinutes(startTime);
@@ -215,9 +228,34 @@ let memoryState = initialState;
 
 const seedIds = new Set(['learner-alexandre-maxime']);
 
+const normalizeLearnerRecord = (learner = {}) => {
+  const identifier = getLearnerIdentifier(learner);
+  const originalCode = getOriginalLearnerCode(learner);
+
+  return {
+    ...learner,
+    id: getLearnerDocumentId({ ...learner, identifier }),
+    identifier,
+    originalCode,
+    code: identifier,
+  };
+};
+
+const normalizeConnectionIp = (entry) => {
+  const isAbsent = entry?.attendance === 'ABSENT' || entry?.status === 'Absent';
+  const isSchoolSession = entry?.type === 'ECOLE';
+
+  return isAbsent || !isSchoolSession ? '' : getLearnerIpAddress(entry);
+};
+
 const sanitizeConnectionEntry = (entry) => {
   const isAbsent = entry?.attendance === 'ABSENT' || entry?.status === 'Absent';
-  if (!isAbsent) return entry;
+  if (!isAbsent) {
+    return {
+      ...entry,
+      ipAddress: normalizeConnectionIp(entry),
+    };
+  }
 
   return {
     ...entry,
@@ -233,20 +271,55 @@ const sanitizeConnectionEntry = (entry) => {
   };
 };
 
-const sanitizeState = (state) => ({
-  learners: (state.learners || []).filter((learner) => !seedIds.has(learner.id)),
-  planningDays: (state.planningDays || []).filter((day) => !seedIds.has(day.learnerId)),
-  connectionTimes: (state.connectionTimes || [])
+export const normalizeAdminConnectionState = (state = {}) => {
+  const learnerIdMap = new Map();
+  const learnerMap = new Map();
+  (state.learners || [])
+    .filter((learner) => !seedIds.has(learner.id))
+    .map((learner) => {
+      const cleanLearner = normalizeLearnerRecord(learner);
+      learnerIdMap.set(learner.id, cleanLearner.id);
+      learnerIdMap.set(learner.code, cleanLearner.id);
+      learnerIdMap.set(learner.identifier, cleanLearner.id);
+      learnerMap.set(cleanLearner.id, {
+        ...(learnerMap.get(cleanLearner.id) || {}),
+        ...cleanLearner,
+      });
+      return cleanLearner;
+    });
+
+  const learners = [...learnerMap.values()];
+
+  const planningDays = (state.planningDays || [])
+    .filter((day) => !seedIds.has(day.learnerId))
+    .map((day) => ({
+      ...day,
+      learnerId: learnerIdMap.get(day.learnerId) || day.learnerId,
+    }));
+
+  const connectionTimes = (state.connectionTimes || [])
     .filter((entry) => !seedIds.has(entry.learnerId))
-    .map(sanitizeConnectionEntry),
-});
+    .map((entry) => {
+      const learnerId = learnerIdMap.get(entry.learnerId) || entry.learnerId;
+      const learner = learnerMap.get(learnerId);
+
+      return sanitizeConnectionEntry({
+        ...entry,
+        learnerId,
+        learnerCode: learner?.identifier || learner?.code || entry.learnerCode,
+        learnerName: learner?.fullName || learner?.name || entry.learnerName,
+      });
+    });
+
+  return { learners, planningDays, connectionTimes };
+};
 
 const readState = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return memoryState;
 
-    memoryState = sanitizeState(JSON.parse(stored));
+    memoryState = normalizeAdminConnectionState(JSON.parse(stored));
     return memoryState;
   } catch {
     return memoryState;
@@ -266,10 +339,11 @@ const persistState = (state) => {
 };
 
 const writeState = (state) => {
+  const cleanState = normalizeAdminConnectionState(state);
   const sortedState = {
-    ...state,
-    planningDays: sortPlanningDays(state.planningDays),
-    connectionTimes: sortConnectionTimes(state.connectionTimes),
+    ...cleanState,
+    planningDays: sortPlanningDays(cleanState.planningDays),
+    connectionTimes: sortConnectionTimes(cleanState.connectionTimes),
   };
 
   persistState(sortedState);
@@ -290,7 +364,7 @@ export const normalizeType = (type) => {
 export const getAdminState = () => readState();
 
 export const cacheAdminState = (state) => {
-  const cleanState = sanitizeState(state);
+  const cleanState = normalizeAdminConnectionState(state);
   persistState({
     ...cleanState,
     planningDays: sortPlanningDays(cleanState.planningDays),
@@ -301,18 +375,22 @@ export const cacheAdminState = (state) => {
 
 export const saveLearner = (learner) => {
   const state = readState();
-  const requestedCode = String(learner.code || '').trim();
+  const requestedOriginalCode = getOriginalLearnerCode(learner);
+  const requestedIdentifier = getLearnerIdentifier(learner);
   const requestedName = String(learner.name || learner.fullName || '').trim();
   const existingLearner = state.learners.find((item) => (
     item.id === learner.id ||
-    (requestedCode && item.code === requestedCode) ||
+    (requestedIdentifier && (item.identifier === requestedIdentifier || item.code === requestedIdentifier)) ||
+    (requestedOriginalCode && item.originalCode === requestedOriginalCode) ||
     (requestedName && (item.fullName || item.name || '').toLowerCase() === requestedName.toLowerCase())
   ));
   const cleanLearner = {
-    id: learner.id || existingLearner?.id || (requestedCode ? `learner-${slugify(requestedCode)}` : crypto.randomUUID()),
+    id: existingLearner?.id || getLearnerDocumentId({ ...learner, identifier: requestedIdentifier }),
+    identifier: requestedIdentifier,
+    originalCode: requestedOriginalCode || existingLearner?.originalCode || '',
     name: String(learner.name || learner.fullName || '').trim(),
     fullName: String(learner.fullName || learner.name || '').trim(),
-    code: String(learner.code || '').trim(),
+    code: requestedIdentifier,
     email: String(learner.email || '').trim(),
     phone: String(learner.phone || '').trim(),
     formation: String(learner.formation || '').trim(),
@@ -337,8 +415,8 @@ export const saveLearner = (learner) => {
     },
   };
 
-  if (!cleanLearner.name || !cleanLearner.code || !cleanLearner.formation) {
-    throw new Error('Nom complet, code apprenant et formation sont obligatoires.');
+  if (!cleanLearner.name || !cleanLearner.identifier || !cleanLearner.formation) {
+    throw new Error('Nom complet, identifiant et formation sont obligatoires.');
   }
 
   if (!cleanLearner.contractStartDate || !cleanLearner.contractEndDate) {
@@ -443,7 +521,6 @@ export const importLearnerPlanningWithConnections = ({ rows, text = '', sourceFi
   const metadata = extractLearnerMetadata(text);
   const learner = saveLearner(metadata);
   const state = readState();
-  const usedIps = new Set(state.connectionTimes.map((entry) => entry.ipAddress).filter(Boolean));
   const existingConnectionMap = new Map(state.connectionTimes.map((entry) => [entry.id, entry]));
 
   const cleanPlanningDays = rows
@@ -518,7 +595,7 @@ export const importLearnerPlanningWithConnections = ({ rows, text = '', sourceFi
         durationSeconds: existingEntry?.durationSeconds || 0,
         duration: existingEntry?.duration || '00:00:00',
         durationFormatted: existingEntry?.durationFormatted || '00:00:00',
-        ipAddress: existingEntry?.ipAddress || '',
+        ipAddress: '',
       }];
     }
 
@@ -553,7 +630,7 @@ export const importLearnerPlanningWithConnections = ({ rows, text = '', sourceFi
         durationSeconds,
         duration: durationFormatted,
         durationFormatted,
-        ipAddress: randomIpv4(usedIps),
+        ipAddress: getLearnerIpAddress(learner),
       };
     });
   });
@@ -620,7 +697,7 @@ const recalculateSingleSession = (entry) => {
     ...entry,
     startTime: isAbsent ? '' : entry.startTime,
     endTime: isAbsent ? '' : entry.endTime,
-    ipAddress: isAbsent ? '' : String(entry.ipAddress || '').trim(),
+    ipAddress: normalizeConnectionIp(entry),
     durationMinutes,
     durationSeconds,
     duration: formatDurationMinutes(durationMinutes),
@@ -871,10 +948,6 @@ export const createConnectionTime = (entry) => {
   const durationSeconds = isAbsent ? 0 : durationSecondsBetween(startTime, endTime);
 
   const existingEntry = state.connectionTimes.find((item) => item.id === entry.id);
-  const usedIps = new Set(state.connectionTimes
-    .filter((item) => item.id !== entry.id)
-    .map((item) => item.ipAddress)
-    .filter(Boolean));
   const cleanEntry = {
     id: entry.id || crypto.randomUUID(),
     learnerId: learner.id,
@@ -895,7 +968,7 @@ export const createConnectionTime = (entry) => {
     durationSeconds,
     duration: formatDurationMinutes(durationMinutes),
     durationFormatted: formatDurationSeconds(durationSeconds),
-    ipAddress: isAbsent ? '' : String(entry.ipAddress || '').trim() || (type === 'ECOLE' ? randomIpv4(usedIps) : ''),
+    ipAddress: isAbsent || type !== 'ECOLE' ? '' : getLearnerIpAddress(learner),
     status: isAbsent ? 'Absent' : type === 'ECOLE' ? 'Present' : type === 'ENTREPRISE' ? 'En entreprise' : 'Férié',
     createdAt: entry.createdAt || existingEntry?.createdAt || nowIso(),
     updatedAt: nowIso(),

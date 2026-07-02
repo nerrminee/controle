@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import DataTable from '../components/DataTable';
 import useAdminConnectionStore from '../hooks/useAdminConnectionStore';
-import { BiArrowBack, BiBookOpen, BiBriefcase, BiCalendar, BiTimeFive, BiUser } from 'react-icons/bi';
+import { BiArrowBack, BiBookOpen, BiCalendar, BiTimeFive, BiUser } from 'react-icons/bi';
 import {
   formatDurationHHMMSS,
   formatFrenchDate as formatAttendanceDate,
@@ -80,7 +80,7 @@ const StudentDetails = () => {
         </div>
       </div>
 
-      <div className="grid-two-cols-equal student-details-summary">
+      <div className="student-details-summary">
         <div className="custom-card">
           <h3 className="section-title mb-3" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
             Informations generales
@@ -98,7 +98,7 @@ const StudentDetails = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
               <div>
-                <span className="text-secondary" style={{ fontSize: '0.8rem', display: 'block' }}>Code apprenant</span>
+                <span className="text-secondary" style={{ fontSize: '0.8rem', display: 'block' }}>Identifiant</span>
                 <span style={{ fontWeight: '600' }}>{learner.code}</span>
               </div>
               <div>
@@ -108,26 +108,12 @@ const StudentDetails = () => {
                 </span>
               </div>
               <div>
-                <span className="text-secondary" style={{ fontSize: '0.8rem', display: 'block' }}>Diplome prepare</span>
-                <span style={{ fontWeight: '600' }}>{learner.level || '-'}</span>
-              </div>
-              <div>
                 <span className="text-secondary" style={{ fontSize: '0.8rem', display: 'block' }}>Periode de contrat</span>
                 <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                   <BiTimeFive size={16} /> {formatAttendanceDate(learner.contractStart || learner.contractStartDate)} - {formatAttendanceDate(learner.contractEnd || learner.contractEndDate)}
                 </span>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="custom-card">
-          <h3 className="section-title mb-3" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-            Entreprise et connexion
-          </h3>
-          <div className="admin-detail-list">
-            <span><strong>Email :</strong> {learner.email || '-'}</span>
-            <span><strong>Entreprise :</strong> <BiBriefcase size={16} /> {learner.company?.name || '-'}</span>
           </div>
         </div>
       </div>

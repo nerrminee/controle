@@ -172,7 +172,7 @@ const AdminLearners = () => {
               <input className="search-input" value={form.fullName} onChange={(event) => updateForm('fullName', event.target.value)} />
             </label>
             <label className="form-field">
-              <span>Code apprenant *</span>
+              <span>Identifiant</span>
               <input className="search-input" value={form.code} onChange={(event) => updateForm('code', event.target.value)} />
             </label>
             <label className="form-field">
@@ -182,10 +182,6 @@ const AdminLearners = () => {
             <label className="form-field">
               <span>Formation *</span>
               <input className="search-input" value={form.formation} onChange={(event) => updateForm('formation', event.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Niveau / diplome prepare</span>
-              <input className="search-input" value={form.level} onChange={(event) => updateForm('level', event.target.value)} />
             </label>
             <label className="form-field">
               <span>Date debut contrat *</span>
@@ -245,7 +241,7 @@ const AdminLearners = () => {
       </form>
 
       <div className="search-filter-bar">
-        <input className="search-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filtrer par nom, code ou formation..." />
+        <input className="search-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filtrer par nom, identifiant ou formation..." />
       </div>
 
       <DataTable headers={['Apprenant', 'Formation', 'Contrat', 'Entreprise', 'Statut', 'Actions']}>
@@ -253,12 +249,11 @@ const AdminLearners = () => {
           <tr key={learner.id}>
             <td>
               <div className="admin-table-primary">{learner.fullName}</div>
-              <div className="admin-table-muted">Code: {learner.code}</div>
+              <div className="admin-table-muted">Identifiant: {learner.code}</div>
               {learner.email && <div className="admin-table-muted">{learner.email}</div>}
             </td>
             <td>
               <div>{learner.formation}</div>
-              <div className="admin-table-muted">{learner.level || 'Diplome non renseigne'}</div>
             </td>
             <td>
               <div>{learner.contractStart || learner.contractStartDate || '-'}</div>

@@ -404,7 +404,7 @@ const AdminConnectionTimes = () => {
               <input className="search-input" value={learnerForm.name} onChange={(event) => updateLearnerForm('name', event.target.value)} />
             </label>
             <label className="form-field">
-              <span>Code apprenant</span>
+              <span>Identifiant</span>
               <input className="search-input" value={learnerForm.code} onChange={(event) => updateLearnerForm('code', event.target.value)} />
             </label>
             <label className="form-field">
@@ -431,7 +431,7 @@ const AdminConnectionTimes = () => {
           </div>
         </form>
 
-        <DataTable className="admin-compact-table" headers={['Apprenant', 'Code', 'Formation', 'Contrat', 'Actions']}>
+        <DataTable className="admin-compact-table" headers={['Apprenant', 'Identifiant', 'Formation', 'Contrat', 'Actions']}>
           {learners.length > 0 ? learners.map((learner) => (
             <tr key={learner.id} className={selectedLearnerId === learner.id ? 'admin-selected-row' : ''}>
               <td><strong>{learner.name || learner.fullName}</strong></td>
@@ -461,7 +461,7 @@ const AdminConnectionTimes = () => {
           <div className="admin-section-heading">
             <div>
               <h3>Temps de connexion</h3>
-              <p className="text-secondary">{selectedLearner.name || selectedLearner.fullName} - code {selectedLearner.code}</p>
+              <p className="text-secondary">{selectedLearner.name || selectedLearner.fullName} - identifiant {selectedLearner.code}</p>
             </div>
             <div className="admin-section-summary">
               <strong>{selectedConnectionTimes.length}</strong>
@@ -573,7 +573,7 @@ const AdminConnectionTimes = () => {
             <p className="text-secondary">Toutes les sessions sont classées par date puis heure de début.</p>
           </div>
         </div>
-        <DataTable className="admin-compact-table admin-global-connection-table" headers={['Apprenant', 'Code', 'Formation', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Durée']}>
+        <DataTable className="admin-compact-table admin-global-connection-table" headers={['Apprenant', 'Identifiant', 'Formation', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Durée']}>
           {allConnectionRows.length > 0 ? allConnectionRows.map((entry) => {
             const displayDate = splitDateAndDay(entry.date, entry.day);
 

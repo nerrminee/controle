@@ -32,7 +32,7 @@ const Students = () => {
         <div style={{ position: 'relative', flex: 1 }}>
           <input
             type="text"
-            placeholder="Rechercher par nom, code ou formation..."
+            placeholder="Rechercher par nom, identifiant ou formation..."
             className="search-input"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
@@ -46,14 +46,13 @@ const Students = () => {
         </div>
       </div>
 
-      <DataTable headers={['Nom', 'Code', 'Formation', 'Diplome', 'Statut', 'Connexions', 'Actions']}>
+      <DataTable headers={['Nom', 'Identifiant', 'Formation', 'Statut', 'Connexions', 'Actions']}>
         {filteredLearners.length > 0 ? (
           filteredLearners.map((learner) => (
             <tr key={learner.id}>
               <td><strong>{learner.fullName}</strong></td>
               <td>{learner.code}</td>
               <td>{learner.formation}</td>
-              <td>{learner.level || '-'}</td>
               <td>
                 <span className={`badge ${learner.active ? 'badge-success' : 'badge-warning'}`}>
                   {learner.active ? 'Actif' : 'Inactif'}
@@ -70,7 +69,7 @@ const Students = () => {
           ))
         ) : (
           <tr>
-            <td colSpan="7" className="text-center text-secondary" style={{ padding: '2rem' }}>
+            <td colSpan="6" className="text-center text-secondary" style={{ padding: '2rem' }}>
               {isLoading ? 'Chargement des apprenants...' : 'Aucun apprenant n a encore ete ajoute par l admin.'}
             </td>
           </tr>

@@ -45,7 +45,7 @@ const AdminExports = () => {
 
     return {
       'Nom apprenant': entry.learnerName,
-      Code: entry.learnerCode,
+      Identifiant: entry.learnerCode,
       Formation: entry.formation,
       Date: displayDate.date,
       Jour: displayDate.day,

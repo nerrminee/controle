@@ -14,6 +14,20 @@ const slugify = (value) => String(value || '')
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '');
 
+const hashValue = (value) => String(value || '')
+  .split('')
+  .reduce((hash, character) => ((hash * 31) + character.charCodeAt(0)) % 1000000, 7);
+
+const getLearnerIdentifier = (learner) => {
+  const key = learner.originalCode || learner.code || learner.fullName || learner.name || learner.id;
+  return `ID-${String(100000 + (hashValue(key) % 900000)).padStart(6, '0')}`;
+};
+
+const getLearnerIpAddress = (learner) => {
+  const key = learner.id || learner.identifier || learner.code || learner.fullName || learner.name;
+  return `192.168.1.${20 + (hashValue(key) % 200)}`;
+};
+
 const randomInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 const randomTime = (hour, minuteStart, minuteEnd) => (
   `${String(hour).padStart(2, '0')}:${String(randomInt(minuteStart, minuteEnd)).padStart(2, '0')}:${String(randomInt(0, 59)).padStart(2, '0')}`
@@ -40,27 +54,18 @@ const normalizeType = (value) => {
 };
 const rowValue = (row, keys) => keys.map((key) => row[key]).find((value) => value !== undefined && value !== '') || '';
 const flexibleValue = (row, matcher) => Object.entries(row).find(([key, value]) => matcher(key) && value)?.[1] || '';
-const randomIp = (usedIps) => {
-  const generators = [
-    () => `192.168.${randomInt(0, 255)}.${randomInt(1, 254)}`,
-    () => `10.${randomInt(0, 255)}.${randomInt(0, 255)}.${randomInt(1, 254)}`,
-    () => `172.${randomInt(16, 31)}.${randomInt(0, 255)}.${randomInt(1, 254)}`,
-  ];
-  let ipAddress = '';
-  do {
-    ipAddress = generators[randomInt(0, generators.length - 1)]();
-  } while (usedIps.has(ipAddress));
-  usedIps.add(ipAddress);
-  return ipAddress;
-};
 
 const text = fs.readFileSync(csvPath, 'utf8');
 const rows = parseDelimitedText(text);
+const originalCode = '252238713';
+const identifier = getLearnerIdentifier({ originalCode, fullName: 'BAILLY JULIE' });
 const learner = {
-  id: 'learner-252238713',
+  id: `learner-${slugify(identifier)}`,
+  identifier,
+  originalCode,
   name: 'BAILLY JULIE',
   fullName: 'BAILLY JULIE',
-  code: '252238713',
+  code: identifier,
   email: '',
   phone: '',
   formation: 'BAC PRO LOGISTIQUE',
@@ -77,7 +82,6 @@ const learner = {
 
 const existingConnections = await getDocs(collection(db, 'connectionTimes'));
 const existingById = new Map(existingConnections.docs.map((item) => [item.id, item.data()]));
-const usedIps = new Set(existingConnections.docs.map((item) => item.data().ipAddress).filter(Boolean));
 const now = new Date().toISOString();
 
 const planningDays = rows.map((row, index) => {
@@ -147,7 +151,7 @@ const connectionTimes = planningDays.flatMap((day) => {
   ].map(([sessionPart, startTime, endTime]) => {
     const id = `${day.id}-${sessionPart}`;
     const existing = existingById.get(id);
-    if (existing) return { ...base, ...existing, id, content: day.content, comment: day.content, updatedAt: now };
+    if (existing) return { ...base, ...existing, id, content: day.content, comment: day.content, updatedAt: now, ipAddress: getLearnerIpAddress(learner) };
 
     const durationSeconds = timeToSeconds(endTime) - timeToSeconds(startTime);
     const durationFormatted = formatDuration(durationSeconds);
@@ -161,7 +165,7 @@ const connectionTimes = planningDays.flatMap((day) => {
       durationSeconds,
       duration: durationFormatted,
       durationFormatted,
-      ipAddress: randomIp(usedIps),
+      ipAddress: getLearnerIpAddress(learner),
     };
   });
 });

@@ -150,7 +150,7 @@ export const printPdfReport = ({ title, learnerLabel, code, formation, period, r
         <h1>${title}</h1>
         <div class="meta">
           <div><strong>Apprenant :</strong> ${learnerLabel}</div>
-          <div><strong>Code :</strong> ${code}</div>
+          <div><strong>Identifiant :</strong> ${code}</div>
           <div><strong>Formation :</strong> ${formation}</div>
           <div><strong>Periode :</strong> ${period}</div>
         </div>

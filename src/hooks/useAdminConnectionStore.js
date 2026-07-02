@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import bundledBackupState from '../data/adminDataBackup.json';
-import { cacheAdminState, getAdminState } from '../services/adminConnectionStore';
+import { cacheAdminState, getAdminState, normalizeAdminConnectionState } from '../services/adminConnectionStore';
 import { loadBackupState, loadFirestoreStateOnce, subscribeToFirestoreState } from '../services/firebaseConnectionRepository';
 
-const bundledBackup = {
+const bundledBackup = normalizeAdminConnectionState({
   learners: bundledBackupState.learners || [],
   planningDays: bundledBackupState.planningDays || [],
   connectionTimes: bundledBackupState.connectionTimes || [],
-};
+});
 
 const normalizeAdminState = (adminState = {}) => ({
   learners: Array.isArray(adminState.learners) ? adminState.learners : [],
