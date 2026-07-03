@@ -4,7 +4,7 @@ import DataTable from '../../components/DataTable';
 import useAdminConnectionStore from '../../hooks/useAdminConnectionStore';
 import { deletePlanningDay, importPlanningDays, savePlanningDay } from '../../services/adminConnectionStore';
 import { readImportFile } from '../../utils/tableImportExport';
-import { sortChronological, splitDateAndDay } from '../../utils/attendanceDisplay';
+import { isCompanyDay, sortChronological, splitDateAndDay } from '../../utils/attendanceDisplay';
 
 const emptyDay = {
   learnerId: '',
@@ -27,7 +27,10 @@ const AdminPlanning = () => {
 
   const learnerMap = useMemo(() => new Map(learners.map((learner) => [learner.id, learner])), [learners]);
   const filteredDays = useMemo(() => (
-    sortChronological(filterLearner === 'all' ? planningDays : planningDays.filter((day) => day.learnerId === filterLearner))
+    sortChronological(
+      (filterLearner === 'all' ? planningDays : planningDays.filter((day) => day.learnerId === filterLearner))
+        .filter((day) => !isCompanyDay(day))
+    )
   ), [planningDays, filterLearner]);
 
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));

@@ -9,6 +9,7 @@ import {
   formatSessionTime,
   formatType as formatAttendanceType,
   isAbsentSession,
+  isCompanyDay,
   isNonConnectionType,
   splitDateAndDay,
   sortChronological,
@@ -19,8 +20,8 @@ const StudentDetails = () => {
   const { learners, connectionTimes, planningDays } = useAdminConnectionStore();
   const [expandedContentIds, setExpandedContentIds] = useState(new Set());
   const learner = learners.find((item) => item.id === id);
-  const learnerConnections = sortChronological(connectionTimes.filter((entry) => entry.learnerId === id));
-  const learnerPlanning = sortChronological(planningDays.filter((day) => day.learnerId === id));
+  const learnerConnections = sortChronological(connectionTimes.filter((entry) => entry.learnerId === id && !isCompanyDay(entry)));
+  const learnerPlanning = sortChronological(planningDays.filter((day) => day.learnerId === id && !isCompanyDay(day)));
 
   if (!learner) {
     return (

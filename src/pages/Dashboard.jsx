@@ -8,6 +8,7 @@ import {
   formatDurationHHMMSS,
   formatFrenchDate,
   formatSessionTime,
+  isCompanyDay,
   compareChronological,
   splitDateAndDay,
 } from '../utils/attendanceDisplay';
@@ -26,18 +27,19 @@ const formatMinutes = (minutes) => {
 
 const Dashboard = () => {
   const { learners, connectionTimes, isLoading } = useAdminConnectionStore();
+  const schoolConnectionTimes = useMemo(() => connectionTimes.filter((entry) => !isCompanyDay(entry)), [connectionTimes]);
   const totalConnectionMinutes = useMemo(() => (
-    connectionTimes.reduce((total, entry) => total + entryMinutes(entry), 0)
-  ), [connectionTimes]);
+    schoolConnectionTimes.reduce((total, entry) => total + entryMinutes(entry), 0)
+  ), [schoolConnectionTimes]);
   const totalConnectionTime = useMemo(() => formatMinutes(totalConnectionMinutes), [totalConnectionMinutes]);
   const connectionSessionCount = useMemo(() => (
-    connectionTimes.filter((entry) => entry.type === 'ECOLE' && entry.status === 'Present').length
-  ), [connectionTimes]);
+    schoolConnectionTimes.filter((entry) => entry.type === 'ECOLE' && entry.status === 'Present').length
+  ), [schoolConnectionTimes]);
   const latestConnections = useMemo(() => (
-    [...connectionTimes]
+    [...schoolConnectionTimes]
       .sort((first, second) => compareChronological(second, first))
       .slice(0, 5)
-  ), [connectionTimes]);
+  ), [schoolConnectionTimes]);
 
   return (
     <div className="dashboard-page">
@@ -119,7 +121,7 @@ const Dashboard = () => {
           <div className="stat-widget mb-3">
             <div className="flex-between mb-3">
               <span className="text-secondary">Lignes de connexion</span>
-              <strong>{connectionTimes.length}</strong>
+              <strong>{schoolConnectionTimes.length}</strong>
             </div>
           </div>
           <div className="school-status-card mt-3" style={{ padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: 'var(--radius)', border: '1px solid var(--border-color)' }}>

@@ -433,7 +433,7 @@
 
 .admin-compact-table .data-table,
 .admin-connection-table .data-table {
-  min-width: 980px;
+  min-width: 1090px;
 }
 
 .admin-connection-table .data-table {
@@ -448,8 +448,9 @@
 .admin-connection-table th:nth-child(5) { width: 260px; }
 .admin-connection-table th:nth-child(6),
 .admin-connection-table th:nth-child(7),
-.admin-connection-table th:nth-child(8) { width: 115px; }
-.admin-connection-table th:nth-child(9) { width: 190px; }
+.admin-connection-table th:nth-child(9) { width: 115px; }
+.admin-connection-table th:nth-child(8) { width: 105px; }
+.admin-connection-table th:nth-child(10) { width: 190px; }
 
 .admin-connection-table td {
   padding: 0.7rem 0.75rem;
@@ -462,13 +463,14 @@
 .admin-connection-table td:nth-child(3),
 .admin-connection-table td:nth-child(6),
 .admin-connection-table td:nth-child(7),
-.admin-connection-table td:nth-child(8) {
+.admin-connection-table td:nth-child(8),
+.admin-connection-table td:nth-child(9) {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
 .admin-global-connection-table .data-table {
-  min-width: 1320px;
+  min-width: 1430px;
   table-layout: fixed;
 }
 
@@ -481,13 +483,15 @@
 .admin-global-connection-table th:nth-child(7) { width: 300px; }
 .admin-global-connection-table th:nth-child(8),
 .admin-global-connection-table th:nth-child(9),
-.admin-global-connection-table th:nth-child(10) { width: 115px; }
+.admin-global-connection-table th:nth-child(11) { width: 115px; }
+.admin-global-connection-table th:nth-child(10) { width: 105px; }
 
 .admin-global-connection-table td:nth-child(4),
 .admin-global-connection-table td:nth-child(5),
 .admin-global-connection-table td:nth-child(8),
 .admin-global-connection-table td:nth-child(9),
-.admin-global-connection-table td:nth-child(10) {
+.admin-global-connection-table td:nth-child(10),
+.admin-global-connection-table td:nth-child(11) {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }

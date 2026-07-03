@@ -73,6 +73,8 @@ export const formatType = (type) => {
 
 export const isAbsentSession = (entry) => entry?.attendance === 'ABSENT' || entry?.status === 'Absent';
 
+export const isCompanyDay = (entry) => entry?.type === 'ENTREPRISE' || entry?.status === 'En entreprise';
+
 export const isNonConnectionType = (entry) => entry?.type === 'ENTREPRISE' || entry?.type === 'FERIE';
 
 export const formatDurationHHMMSS = (entry) => {

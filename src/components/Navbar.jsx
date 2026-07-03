@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { BiLogOut, BiMenu, BiUserCircle } from 'react-icons/bi';
+import { BiLogOut, BiMenu } from 'react-icons/bi';
 import { isAdminAuthenticated, logoutAdmin } from '../services/adminConnectionStore';
 import { SCHOOL_NAME } from '../config/school';
 
@@ -27,11 +27,6 @@ const Navbar = ({ onToggleSidebar }) => {
     return params.id ? "Details de l'Apprenant" : 'Portail Scolaire';
   };
 
-  const getFormattedDate = () => {
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date().toLocaleDateString('fr-FR', options);
-  };
-
   const handleLogout = () => {
     logoutAdmin();
     navigate('/admin/login');
@@ -47,21 +42,11 @@ const Navbar = ({ onToggleSidebar }) => {
       </div>
 
       <div className="navbar-right">
-        <div className="navbar-date text-secondary">
-          {getFormattedDate()}
-        </div>
-        <div className="user-profile">
-          <div className="user-info">
-            <span className="user-name">Admin {SCHOOL_NAME}</span>
-            <span className="user-role">Secretariat</span>
-          </div>
-          <BiUserCircle size={36} className="user-avatar" />
-          {location.pathname.startsWith('/admin') && isAdminAuthenticated() && (
-            <button className="icon-button" type="button" title="Deconnexion admin" onClick={handleLogout}>
-              <BiLogOut size={20} />
-            </button>
-          )}
-        </div>
+        {location.pathname.startsWith('/admin') && isAdminAuthenticated() && (
+          <button className="icon-button" type="button" title="Deconnexion admin" onClick={handleLogout}>
+            <BiLogOut size={20} />
+          </button>
+        )}
       </div>
     </header>
   );

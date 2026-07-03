@@ -19,6 +19,7 @@ import {
   formatDurationHHMMSS,
   formatSessionTime,
   isAbsentSession,
+  isCompanyDay,
   compareChronological,
   splitDateAndDay,
   sortChronological,
@@ -76,6 +77,16 @@ const buildConnectionDraft = (entry) => ({
   createdAt: entry.createdAt,
 });
 
+const getStatusBadgeClass = (entry) => (
+  isAbsentSession(entry) ? 'badge-danger' : entry.status === 'Present' ? 'badge-success' : 'badge-warning'
+);
+
+const renderStatusBadge = (entry) => (
+  <span className={`badge compact-badge ${getStatusBadgeClass(entry)}`}>
+    {isAbsentSession(entry) ? 'Absent' : entry.status || 'Present'}
+  </span>
+);
+
 const AdminConnectionTimes = () => {
   const { learners, connectionTimes, isLoading } = useAdminConnectionStore();
   const [learnerForm, setLearnerForm] = useState(emptyLearner);
@@ -92,11 +103,11 @@ const AdminConnectionTimes = () => {
   const selectedConnectionTimes = useMemo(() => (
     selectedLearnerId
       ? connectionTimes
-        .filter((entry) => entry.learnerId === selectedLearnerId)
+        .filter((entry) => entry.learnerId === selectedLearnerId && !isCompanyDay(entry))
         .sort(compareChronological)
       : []
   ), [connectionTimes, selectedLearnerId]);
-  const allConnectionRows = useMemo(() => sortChronological(connectionTimes), [connectionTimes]);
+  const allConnectionRows = useMemo(() => sortChronological(connectionTimes.filter((entry) => !isCompanyDay(entry))), [connectionTimes]);
 
   const resetLearnerForm = () => setLearnerForm(emptyLearner);
   const resetConnectionForm = (learnerId = selectedLearnerId) => {
@@ -322,6 +333,7 @@ const AdminConnectionTimes = () => {
           <td>{entry.content || entry.comment}</td>
           <td>{formatSessionTime(entry, 'startTime')}</td>
           <td>{formatSessionTime(entry, 'endTime')}</td>
+          <td>{renderStatusBadge(entry)}</td>
           <td>{formatDurationHHMMSS(entry)}</td>
           <td>
             <div className="admin-row-actions admin-row-actions-nowrap">
@@ -360,6 +372,7 @@ const AdminConnectionTimes = () => {
         <td>
           <input required={!isAbsent} disabled={isAbsent} type="time" step="1" className="search-input admin-table-input" value={isAbsent ? '' : form.endTime} onChange={(event) => updateEditingConnectionForm('endTime', event.target.value)} />
         </td>
+        <td>{renderStatusBadge(form)}</td>
         <td><strong className="admin-duration-preview">{getPreviewDuration(form) || '0h00'}</strong></td>
         <td>
           <div className="admin-row-actions admin-row-actions-nowrap">
@@ -549,14 +562,14 @@ const AdminConnectionTimes = () => {
           </div>
 
           <form id="connection-edit-form" onSubmit={handleSaveConnectionEdit}>
-            <DataTable className="admin-connection-table" headers={['Semaine', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Durée', 'Actions']}>
+            <DataTable className="admin-connection-table" headers={['Semaine', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Statut', 'Durée', 'Actions']}>
               {selectedConnectionTimes.length > 0 ? selectedConnectionTimes.map((entry) => (
                 <tr key={entry.id} className={editingConnectionId === entry.id ? 'admin-editing-row' : ''}>
                   {renderConnectionCells(entry)}
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="9" className="text-center text-secondary" style={{ padding: '2rem' }}>
+                  <td colSpan="10" className="text-center text-secondary" style={{ padding: '2rem' }}>
                     Aucun temps de connexion pour cet apprenant.
                   </td>
                 </tr>
@@ -573,7 +586,7 @@ const AdminConnectionTimes = () => {
             <p className="text-secondary">Toutes les sessions sont classées par date puis heure de début.</p>
           </div>
         </div>
-        <DataTable className="admin-compact-table admin-global-connection-table" headers={['Apprenant', 'Identifiant', 'Formation', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Durée']}>
+        <DataTable className="admin-compact-table admin-global-connection-table" headers={['Apprenant', 'Identifiant', 'Formation', 'Date', 'Jour', 'Type', 'Contenu', 'Début', 'Fin', 'Statut', 'Durée']}>
           {allConnectionRows.length > 0 ? allConnectionRows.map((entry) => {
             const displayDate = splitDateAndDay(entry.date, entry.day);
 
@@ -588,12 +601,13 @@ const AdminConnectionTimes = () => {
                 <td>{entry.content || entry.comment || '-'}</td>
                 <td>{formatSessionTime(entry, 'startTime')}</td>
                 <td>{formatSessionTime(entry, 'endTime')}</td>
+                <td>{renderStatusBadge(entry)}</td>
                 <td>{formatDurationHHMMSS(entry)}</td>
               </tr>
             );
           }) : (
             <tr>
-              <td colSpan="10" className="text-center text-secondary" style={{ padding: '2rem' }}>
+              <td colSpan="11" className="text-center text-secondary" style={{ padding: '2rem' }}>
                 Aucun temps de connexion importé ou enregistré.
               </td>
             </tr>
