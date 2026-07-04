@@ -4,7 +4,7 @@ import DataTable from '../../components/DataTable';
 import useAdminConnectionStore from '../../hooks/useAdminConnectionStore';
 import { deletePlanningDay, importPlanningDays, savePlanningDay } from '../../services/adminConnectionStore';
 import { readImportFile } from '../../utils/tableImportExport';
-import { isCompanyDay, sortChronological, splitDateAndDay } from '../../utils/attendanceDisplay';
+import { isVisibleConnectionListEntry, sortChronological, splitDateAndDay } from '../../utils/attendanceDisplay';
 
 const emptyDay = {
   learnerId: '',
@@ -29,7 +29,7 @@ const AdminPlanning = () => {
   const filteredDays = useMemo(() => (
     sortChronological(
       (filterLearner === 'all' ? planningDays : planningDays.filter((day) => day.learnerId === filterLearner))
-        .filter((day) => !isCompanyDay(day))
+        .filter(isVisibleConnectionListEntry)
     )
   ), [planningDays, filterLearner]);
 

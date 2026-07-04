@@ -8,7 +8,7 @@ import {
   formatDurationHHMMSS,
   formatFrenchDate,
   formatSessionTime,
-  isCompanyDay,
+  isVisibleConnectionListEntry,
   compareChronological,
   splitDateAndDay,
 } from '../utils/attendanceDisplay';
@@ -27,7 +27,7 @@ const formatMinutes = (minutes) => {
 
 const Dashboard = () => {
   const { learners, connectionTimes, isLoading } = useAdminConnectionStore();
-  const schoolConnectionTimes = useMemo(() => connectionTimes.filter((entry) => !isCompanyDay(entry)), [connectionTimes]);
+  const schoolConnectionTimes = useMemo(() => connectionTimes.filter(isVisibleConnectionListEntry), [connectionTimes]);
   const totalConnectionMinutes = useMemo(() => (
     schoolConnectionTimes.reduce((total, entry) => total + entryMinutes(entry), 0)
   ), [schoolConnectionTimes]);

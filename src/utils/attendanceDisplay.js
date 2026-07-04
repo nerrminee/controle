@@ -75,7 +75,17 @@ export const isAbsentSession = (entry) => entry?.attendance === 'ABSENT' || entr
 
 export const isCompanyDay = (entry) => entry?.type === 'ENTREPRISE' || entry?.status === 'En entreprise';
 
-export const isNonConnectionType = (entry) => entry?.type === 'ENTREPRISE' || entry?.type === 'FERIE';
+export const isHolidayEntry = (entry) => (
+  entry?.holiday === true ||
+  entry?.ferie === true ||
+  entry?.type === 'FERIE' ||
+  entry?.status === 'Ferie' ||
+  entry?.status === 'Férié'
+);
+
+export const isNonConnectionType = (entry) => isCompanyDay(entry) || isHolidayEntry(entry);
+
+export const isVisibleConnectionListEntry = (entry) => !isAbsentSession(entry) && !isNonConnectionType(entry);
 
 export const formatDurationHHMMSS = (entry) => {
   if (isAbsentSession(entry)) return 'Absent';

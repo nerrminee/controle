@@ -5,7 +5,7 @@ import { exportExcelTable, printPdfReport } from '../../utils/tableImportExport'
 import {
   formatDurationHHMMSS,
   formatSessionTime,
-  isCompanyDay,
+  isVisibleConnectionListEntry,
   sortChronological,
   splitDateAndDay,
 } from '../../utils/attendanceDisplay';
@@ -29,7 +29,7 @@ const AdminExports = () => {
 
   const selectedLearner = learners.find((learner) => learner.id === learnerId);
   const rows = useMemo(() => sortChronological(connectionTimes.filter((entry) => {
-    if (isCompanyDay(entry)) return false;
+    if (!isVisibleConnectionListEntry(entry)) return false;
     if (learnerId !== 'all' && entry.learnerId !== learnerId) return false;
     if (startDate && entry.date < startDate) return false;
     if (endDate && entry.date > endDate) return false;

@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import DataTable from '../components/DataTable';
 import useAdminConnectionStore from '../hooks/useAdminConnectionStore';
 import { BiInfoCircle, BiSearch } from 'react-icons/bi';
-import { isCompanyDay } from '../utils/attendanceDisplay';
+import { isVisibleConnectionListEntry } from '../utils/attendanceDisplay';
 
 const Students = () => {
   const { learners, connectionTimes, isLoading } = useAdminConnectionStore();
   const [searchTerm, setSearchTerm] = useState('');
 
-  const totalsByLearner = useMemo(() => connectionTimes.filter((entry) => !isCompanyDay(entry)).reduce((totals, entry) => {
+  const totalsByLearner = useMemo(() => connectionTimes.filter(isVisibleConnectionListEntry).reduce((totals, entry) => {
     totals[entry.learnerId] = (totals[entry.learnerId] || 0) + 1;
     return totals;
   }, {}), [connectionTimes]);

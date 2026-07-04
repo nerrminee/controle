@@ -19,7 +19,7 @@ import {
   formatDurationHHMMSS,
   formatSessionTime,
   isAbsentSession,
-  isCompanyDay,
+  isVisibleConnectionListEntry,
   compareChronological,
   splitDateAndDay,
   sortChronological,
@@ -103,11 +103,11 @@ const AdminConnectionTimes = () => {
   const selectedConnectionTimes = useMemo(() => (
     selectedLearnerId
       ? connectionTimes
-        .filter((entry) => entry.learnerId === selectedLearnerId && !isCompanyDay(entry))
+        .filter((entry) => entry.learnerId === selectedLearnerId && isVisibleConnectionListEntry(entry))
         .sort(compareChronological)
       : []
   ), [connectionTimes, selectedLearnerId]);
-  const allConnectionRows = useMemo(() => sortChronological(connectionTimes.filter((entry) => !isCompanyDay(entry))), [connectionTimes]);
+  const allConnectionRows = useMemo(() => sortChronological(connectionTimes.filter(isVisibleConnectionListEntry)), [connectionTimes]);
 
   const resetLearnerForm = () => setLearnerForm(emptyLearner);
   const resetConnectionForm = (learnerId = selectedLearnerId) => {

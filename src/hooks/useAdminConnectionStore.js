@@ -21,15 +21,44 @@ const hasStateData = (adminState) => (
   normalizeAdminState(adminState).connectionTimes.length > 0
 );
 
+const isBundledAttendanceAdjustment = (entry = {}) => (
+  entry.status === 'Absent' ||
+  entry.attendance === 'ABSENT' ||
+  Boolean(entry.pauseReason)
+);
+
+const mergeBundledAttendanceAdjustments = (adminState = {}) => {
+  const cleanState = normalizeAdminState(adminState);
+  if (!hasStateData(cleanState)) return bundledBackup;
+
+  const adjustmentMap = new Map(
+    bundledBackup.connectionTimes
+      .filter(isBundledAttendanceAdjustment)
+      .map((entry) => [entry.id, entry])
+  );
+  const existingIds = new Set(cleanState.connectionTimes.map((entry) => entry.id));
+  const mergedConnectionTimes = cleanState.connectionTimes.map((entry) => (
+    adjustmentMap.has(entry.id) ? { ...entry, ...adjustmentMap.get(entry.id) } : entry
+  ));
+  const missingAdjustedRows = bundledBackup.connectionTimes.filter((entry) => (
+    isBundledAttendanceAdjustment(entry) && !existingIds.has(entry.id)
+  ));
+
+  return {
+    ...cleanState,
+    connectionTimes: [...mergedConnectionTimes, ...missingAdjustedRows],
+  };
+};
+
 const loadRemoteOrBackupState = async () => {
   const remoteState = normalizeAdminState(await loadFirestoreStateOnce());
-  if (hasStateData(remoteState)) return remoteState;
-  return normalizeAdminState(await loadBackupState());
+  if (hasStateData(remoteState)) return mergeBundledAttendanceAdjustments(remoteState);
+  return mergeBundledAttendanceAdjustments(await loadBackupState());
 };
 
 const getInitialState = () => {
   const adminState = normalizeAdminState(getAdminState());
-  return hasStateData(adminState) ? adminState : bundledBackup;
+  return hasStateData(adminState) ? mergeBundledAttendanceAdjustments(adminState) : bundledBackup;
 };
 
 const useAdminConnectionStore = () => {
@@ -40,9 +69,10 @@ const useAdminConnectionStore = () => {
 
   useEffect(() => {
     let mounted = true;
-    if (!hasStateData(getAdminState()) && hasStateData(bundledBackup)) {
-      cacheAdminState(bundledBackup);
-      setState({ ...bundledBackup, isLoading: false });
+    const mergedInitialState = mergeBundledAttendanceAdjustments(getAdminState());
+    if (hasStateData(mergedInitialState)) {
+      cacheAdminState(mergedInitialState);
+      setState({ ...mergedInitialState, isLoading: false });
     }
 
     const refresh = () => {
@@ -78,14 +108,14 @@ const useAdminConnectionStore = () => {
       });
 
     const unsubscribe = subscribeToFirestoreState((remoteState, metadata = {}) => {
-      const currentState = normalizeAdminState(getAdminState());
+      const currentState = mergeBundledAttendanceAdjustments(getAdminState());
 
       if (metadata.isEmpty) {
         setState((current) => ({ ...currentState, isLoading: current.isLoading }));
         return;
       }
 
-      cacheAdminState(normalizeAdminState(remoteState));
+      cacheAdminState(mergeBundledAttendanceAdjustments(remoteState));
       setState({ ...getAdminState(), isLoading: false });
     }, () => {
       setState((current) => ({ ...current, isLoading: false }));
